@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, SafeAreaView, StyleSheet } from 'react-native';
 
-const ImpactScreen = () => {
+const ImpactScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>

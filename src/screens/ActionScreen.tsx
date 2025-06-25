@@ -1,15 +1,15 @@
 import React from 'react';
 import { View, Text, SafeAreaView, StyleSheet } from 'react-native';
 
-const ProfileScreen = () => {
+const ActionScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>👤 Your Profile</Text>
-        <Text style={styles.subtitle}>Achievements, karma, and settings</Text>
+        <Text style={styles.title}>✨ Take Action</Text>
+        <Text style={styles.subtitle}>Share good deeds or ask for help</Text>
         <Text style={styles.description}>
-          View your karma score, track your good deeds, unlock achievements,
-          and manage your account settings and preferences.
+          This is the central hub where users can post about good deeds they've
+          completed or request help from the community.
         </Text>
       </View>
     </SafeAreaView>
@@ -46,4 +46,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ProfileScreen;
+export default ActionScreen;

@@ -8,9 +8,10 @@ import {
   StyleSheet,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Deed, HelpRequest } from '../types';
 
-const HomeScreen = () => {
-  const mockDeeds = [
+const HomeScreen: React.FC = () => {
+  const mockDeeds: Deed[] = [
     {
       id: 1,
       user: 'Sarah M.',
@@ -37,7 +38,7 @@ const HomeScreen = () => {
     },
   ];
 
-  const nearbyRequests = [
+  const nearbyRequests: HelpRequest[] = [
     {
       id: 1,
       request: 'Need help moving furniture',
@@ -68,7 +69,7 @@ const HomeScreen = () => {
         {/* Nearby Help Requests */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Help Requests Near You</Text>
-          {nearbyRequests.map((request) => (
+          {nearbyRequests.map(request => (
             <TouchableOpacity key={request.id} style={styles.requestCard}>
               <View style={styles.cardContent}>
                 <View style={styles.cardLeft}>
@@ -89,7 +90,7 @@ const HomeScreen = () => {
         {/* Recent Good Deeds Feed */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Good Deeds</Text>
-          {mockDeeds.map((deed) => (
+          {mockDeeds.map(deed => (
             <View key={deed.id} style={styles.deedCard}>
               <View style={styles.cardContent}>
                 <View style={styles.cardLeft}>
