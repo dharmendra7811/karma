@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { ActivityService, CommunityActivity } from '../lib/activityService';
 import { DeedService } from '../lib/deedService';
 import { DeedCategory } from '../lib/supabase';
+import KarmaMapView from '../components/KarmaMapView';
 
 interface FilterOption {
   id: string;
@@ -22,7 +23,7 @@ interface FilterOption {
 }
 
 const ExploreScreen: React.FC = () => {
-  const [viewMode, setViewMode] = useState<'list'>('list'); // Removed map for now
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [activities, setActivities] = useState<CommunityActivity[]>([]);
   const [categories, setCategories] = useState<DeedCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,8 +44,14 @@ const ExploreScreen: React.FC = () => {
     try {
       const [activitiesData, categoriesData] = await Promise.all([
         ActivityService.getActivities({
-          status: selectedFilters.status === 'all' ? undefined : selectedFilters.status,
-          category_id: selectedFilters.category === 'all' ? undefined : selectedFilters.category,
+          status:
+            selectedFilters.status === 'all'
+              ? undefined
+              : selectedFilters.status,
+          category_id:
+            selectedFilters.category === 'all'
+              ? undefined
+              : selectedFilters.category,
           upcoming_only: selectedFilters.status === 'upcoming',
         }),
         DeedService.getCategories(),
@@ -71,8 +78,8 @@ const ExploreScreen: React.FC = () => {
     ...categories.map(cat => ({
       id: cat.id,
       label: cat.name,
-      icon: cat.icon || 'category'
-    }))
+      icon: cat.icon || 'category',
+    })),
   ];
 
   const statusFilters: FilterOption[] = [
@@ -87,7 +94,7 @@ const ExploreScreen: React.FC = () => {
     return {
       name: category?.name || 'General',
       icon: category?.icon || 'category',
-      color: category?.color || '#10B981'
+      color: category?.color || '#10B981',
     };
   };
 
@@ -110,8 +117,14 @@ const ExploreScreen: React.FC = () => {
   };
 
   const handleJoinActivity = async (activity: CommunityActivity) => {
-    if (activity.max_participants && activity.current_participants >= activity.max_participants) {
-      Alert.alert('Activity Full', 'This activity has reached its maximum number of participants.');
+    if (
+      activity.max_participants &&
+      activity.current_participants >= activity.max_participants
+    ) {
+      Alert.alert(
+        'Activity Full',
+        'This activity has reached its maximum number of participants.',
+      );
       return;
     }
 
@@ -120,37 +133,79 @@ const ExploreScreen: React.FC = () => {
       `Are you ready to make a positive impact?`,
       [
         { text: 'Not Yet', style: 'cancel' },
-        { 
-          text: 'Count Me In!', 
+        {
+          text: 'Count Me In!',
           onPress: async () => {
             try {
               await ActivityService.joinActivity(activity.id);
               Alert.alert(
                 'Awesome! 🎉',
                 `You've successfully joined "${activity.title}". Check back for updates from the organizer.`,
-                [{ text: 'Great!', style: 'default' }]
+                [{ text: 'Great!', style: 'default' }],
               );
               // Refresh the list to show updated participant count
               loadData();
             } catch (error) {
               console.error('Failed to join activity:', error);
-              Alert.alert('Error', 'Failed to join activity. Please try again.');
+              Alert.alert(
+                'Error',
+                'Failed to join activity. Please try again.',
+              );
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
+
+  // const handleMarkerPress = (activity: CommunityActivity) => {
+  //   setSelectedActivity(activity);
+  //   // Show activity details
+  //   Alert.alert(
+  //     `${activity.title} 🌟`,
+  //     `${activity.description}\n\n📅 ${formatDateTime(
+  //       activity.activity_date,
+  //       activity.activity_time,
+  //     )}\n📍 ${activity.location}\n👥 ${activity.current_participants}${
+  //       activity.max_participants ? `/${activity.max_participants}` : ''
+  //     } participants`,
+  //     [
+  //       {
+  //         text: 'Close',
+  //         style: 'cancel',
+  //         onPress: () => setSelectedActivity(undefined),
+  //       },
+  //       {
+  //         text: 'Join Activity',
+  //         onPress: () => {
+  //           setSelectedActivity(undefined);
+  //           handleJoinActivity(activity);
+  //         },
+  //       },
+  //     ],
+  //   );
+  // };
 
   const renderActivityCard = (activity: CommunityActivity) => {
     const categoryInfo = getCategoryInfo(activity.category_id);
     const isPastEvent = new Date(activity.activity_date) < new Date();
 
     return (
-      <View style={[styles.activityCard, isPastEvent && styles.pastActivityCard]}>
+      <View
+        style={[styles.activityCard, isPastEvent && styles.pastActivityCard]}
+      >
         <View style={styles.activityHeader}>
-          <View style={[styles.categoryBadge, { backgroundColor: categoryInfo.color + '20' }]}>
-            <Icon name={categoryInfo.icon} size={14} color={categoryInfo.color} />
+          <View
+            style={[
+              styles.categoryBadge,
+              { backgroundColor: categoryInfo.color + '20' },
+            ]}
+          >
+            <Icon
+              name={categoryInfo.icon}
+              size={14}
+              color={categoryInfo.color}
+            />
             <Text style={[styles.categoryText, { color: categoryInfo.color }]}>
               {categoryInfo.name}
             </Text>
@@ -163,13 +218,13 @@ const ExploreScreen: React.FC = () => {
             </Text>
           </View>
         </View>
-        
+
         <Text style={styles.activityTitle}>{activity.title}</Text>
-        
+
         <Text style={styles.activityDescription} numberOfLines={2}>
           {activity.description}
         </Text>
-        
+
         <View style={styles.activityMeta}>
           <View style={styles.metaItem}>
             <Icon name="schedule" size={16} color="#6B7280" />
@@ -187,31 +242,47 @@ const ExploreScreen: React.FC = () => {
             <View style={styles.metaItem}>
               <Icon name="person" size={16} color="#6B7280" />
               <Text style={styles.metaText}>
-                by {activity.creator.full_name || activity.creator.username || 'Anonymous'}
+                by{' '}
+                {activity.creator.full_name ||
+                  activity.creator.username ||
+                  'Anonymous'}
               </Text>
             </View>
           )}
         </View>
-        
+
         <View style={styles.statusContainer}>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(activity.status) }]}>
-            <Text style={styles.statusText}>{activity.status.toUpperCase()}</Text>
+          <View
+            style={[
+              styles.statusBadge,
+              { backgroundColor: getStatusColor(activity.status) },
+            ]}
+          >
+            <Text style={styles.statusText}>
+              {activity.status.toUpperCase()}
+            </Text>
           </View>
         </View>
-        
+
         {activity.status === 'upcoming' && !isPastEvent && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
               styles.joinButton,
-              (activity.max_participants && activity.current_participants >= activity.max_participants) && 
-              styles.joinButtonDisabled
+              activity.max_participants &&
+                activity.current_participants >= activity.max_participants &&
+                styles.joinButtonDisabled,
             ]}
             onPress={() => handleJoinActivity(activity)}
-            disabled={activity.max_participants && activity.current_participants >= activity.max_participants}
+            disabled={
+              activity.max_participants &&
+              activity.current_participants >= activity.max_participants
+            }
           >
             <Text style={styles.joinButtonText}>
-              {(activity.max_participants && activity.current_participants >= activity.max_participants) 
-                ? 'Activity Full' : 'Join Activity'}
+              {activity.max_participants &&
+              activity.current_participants >= activity.max_participants
+                ? 'Activity Full'
+                : 'Join Activity'}
             </Text>
           </TouchableOpacity>
         )}
@@ -221,43 +292,50 @@ const ExploreScreen: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'upcoming': return '#FEF3C7';
-      case 'ongoing': return '#DBEAFE';
-      case 'completed': return '#D1FAE5';
-      case 'cancelled': return '#FEE2E2';
-      default: return '#F3F4F6';
+      case 'upcoming':
+        return '#FEF3C7';
+      case 'ongoing':
+        return '#DBEAFE';
+      case 'completed':
+        return '#D1FAE5';
+      case 'cancelled':
+        return '#FEE2E2';
+      default:
+        return '#F3F4F6';
     }
   };
 
   const renderFilterChips = (
-    filters: FilterOption[], 
-    selectedValue: string, 
-    onSelect: (value: string) => void
+    filters: FilterOption[],
+    selectedValue: string,
+    onSelect: (value: string) => void,
   ) => (
-    <ScrollView 
-      horizontal 
+    <ScrollView
+      horizontal
       showsHorizontalScrollIndicator={false}
       style={styles.filterScroll}
       contentContainerStyle={styles.filterContainer}
     >
-      {filters.map((filter) => (
+      {filters.map(filter => (
         <TouchableOpacity
           key={filter.id}
           style={[
             styles.filterChip,
-            selectedValue === filter.id && styles.filterChipSelected
+            selectedValue === filter.id && styles.filterChipSelected,
           ]}
           onPress={() => onSelect(filter.id)}
         >
-          <Icon 
-            name={filter.icon} 
-            size={16} 
-            color={selectedValue === filter.id ? '#065F46' : '#6B7280'} 
+          <Icon
+            name={filter.icon}
+            size={16}
+            color={selectedValue === filter.id ? '#065F46' : '#6B7280'}
           />
-          <Text style={[
-            styles.filterChipText,
-            selectedValue === filter.id && styles.filterChipTextSelected
-          ]}>
+          <Text
+            style={[
+              styles.filterChipText,
+              selectedValue === filter.id && styles.filterChipTextSelected,
+            ]}
+          >
             {filter.label}
           </Text>
         </TouchableOpacity>
@@ -270,7 +348,9 @@ const ExploreScreen: React.FC = () => {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#10B981" />
-          <Text style={styles.loadingText}>Loading community activities...</Text>
+          <Text style={styles.loadingText}>
+            Loading community activities...
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -281,53 +361,107 @@ const ExploreScreen: React.FC = () => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Explore Community Activities 🌍</Text>
-        <Text style={styles.headerSubtitle}>Find ways to make a difference together</Text>
+        <Text style={styles.headerSubtitle}>
+          Find ways to make a difference together
+        </Text>
+
+        {/* View Mode Toggle */}
+        <View style={styles.viewToggle}>
+          <TouchableOpacity
+            style={[
+              styles.toggleButton,
+              viewMode === 'list' && styles.toggleButtonActive,
+            ]}
+            onPress={() => setViewMode('list')}
+          >
+            <Icon
+              name="list"
+              size={20}
+              color={viewMode === 'list' ? '#FFFFFF' : '#059669'}
+            />
+            <Text
+              style={[
+                styles.toggleText,
+                viewMode === 'list' && styles.toggleTextActive,
+              ]}
+            >
+              List
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.toggleButton,
+              viewMode === 'map' && styles.toggleButtonActive,
+            ]}
+            onPress={() => setViewMode('map')}
+          >
+            <Icon
+              name="map"
+              size={20}
+              color={viewMode === 'map' ? '#FFFFFF' : '#059669'}
+            />
+            <Text
+              style={[
+                styles.toggleText,
+                viewMode === 'map' && styles.toggleTextActive,
+              ]}
+            >
+              Map
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Filters */}
       <View style={styles.filtersSection}>
         <Text style={styles.filterLabel}>Category:</Text>
-        {renderFilterChips(
-          categoryFilters, 
-          selectedFilters.category, 
-          (value) => setSelectedFilters({...selectedFilters, category: value})
+        {renderFilterChips(categoryFilters, selectedFilters.category, value =>
+          setSelectedFilters({ ...selectedFilters, category: value }),
         )}
-        
+
         <Text style={styles.filterLabel}>Status:</Text>
-        {renderFilterChips(
-          statusFilters, 
-          selectedFilters.status, 
-          (value) => setSelectedFilters({...selectedFilters, status: value})
+        {renderFilterChips(statusFilters, selectedFilters.status, value =>
+          setSelectedFilters({ ...selectedFilters, status: value }),
         )}
       </View>
 
       {/* Activities List */}
-      <ScrollView 
-        style={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {activities.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Icon name="event-available" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyTitle}>No activities found</Text>
-            <Text style={styles.emptyText}>
-              {selectedFilters.category !== 'all' || selectedFilters.status !== 'upcoming'
-                ? 'Try adjusting your filters to see more activities.'
-                : 'Be the first to create a community activity!'}
-            </Text>
-          </View>
-        ) : (
-          activities.map((activity) => (
-            <View key={activity.id}>
-              {renderActivityCard(activity)}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#10B981" />
+          <Text style={styles.loadingText}>
+            Loading community activities...
+          </Text>
+        </View>
+      ) : viewMode === 'map' ? (
+        <KarmaMapView activities={activities} />
+      ) : (
+        <ScrollView
+          style={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {activities.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Icon name="event-available" size={48} color="#9CA3AF" />
+              <Text style={styles.emptyTitle}>No activities found</Text>
+              <Text style={styles.emptyText}>
+                {selectedFilters.category !== 'all' ||
+                selectedFilters.status !== 'upcoming'
+                  ? 'Try adjusting your filters to see more activities.'
+                  : 'Be the first to create a community activity!'}
+              </Text>
             </View>
-          ))
-        )}
-      </ScrollView>
+          ) : (
+            activities.map(activity => (
+              <View key={activity.id}>{renderActivityCard(activity)}</View>
+            ))
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };
@@ -363,6 +497,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#059669',
     textAlign: 'center',
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#E5E7EB',
+    borderRadius: 25,
+    padding: 4,
+    marginTop: 12,
+    alignSelf: 'center',
+  },
+  toggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  toggleButtonActive: {
+    backgroundColor: '#059669',
+  },
+  toggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#059669',
+    marginLeft: 6,
+  },
+  toggleTextActive: {
+    color: '#FFFFFF',
   },
   filtersSection: {
     paddingHorizontal: 16,

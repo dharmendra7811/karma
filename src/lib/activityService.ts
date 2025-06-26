@@ -6,6 +6,8 @@ export interface CommunityActivity {
   title: string;
   description: string;
   location?: string;
+  latitude?: number;
+  longitude?: number;
   activity_date: string;
   activity_time: string;
   max_participants?: number;
@@ -42,6 +44,8 @@ export class ActivityService {
     title: string;
     description: string;
     location?: string;
+    latitude?: number;
+    longitude?: number;
     activity_date: string;
     activity_time: string;
     max_participants?: number;

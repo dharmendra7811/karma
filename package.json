@@ -14,8 +14,10 @@
     "@supabase/supabase-js": "^2.39.0",
     "react": "18.2.0",
     "react-native": "0.72.17",
+    "react-native-maps": "^1.10.0",
     "react-native-url-polyfill": "^2.0.0",
-    "react-native-vector-icons": "^10.0.0"
+    "react-native-vector-icons": "^10.0.0",
+    "react-native-webview": "^13.15.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
