@@ -307,11 +307,6 @@ const ActionScreen: React.FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'deed' ? renderLogDeedTab() : renderCreateActivityTab()}
-
-      {/* Motivational Quote */}
-      <View style={styles.quoteContainer}>
-        <Text style={styles.quote}>Kindness creates ripples 🌊</Text>
-      </View>
     </SafeAreaView>
   );
 };
