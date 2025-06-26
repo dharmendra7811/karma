@@ -7,6 +7,17 @@ export interface Deed {
   time: string;
 }
 
+export interface GoodDeed {
+  id: number;
+  user: string;
+  avatar: string;
+  image: string;
+  description: string;
+  likes: number;
+  comments: number;
+  timeAgo: string;
+}
+
 export interface HelpRequest {
   id: number;
   request: string;

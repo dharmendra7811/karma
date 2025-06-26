@@ -8,117 +8,126 @@ import {
   StyleSheet,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { Deed, HelpRequest } from '../types';
+import { GoodDeed } from '../types';
+import FloatingActionButton from '../components/FloatingActionButton';
 
 const HomeScreen: React.FC = () => {
-  const mockDeeds: Deed[] = [
+  const goodDeeds: GoodDeed[] = [
     {
       id: 1,
-      user: 'Sarah M.',
-      action: 'Helped elderly neighbor with groceries',
-      location: '2 blocks away',
-      karma: 15,
-      time: '2h ago',
+      user: 'Sarah Chen',
+      avatar: '🌸',
+      image: '🌳',
+      description:
+        'Planted 5 trees in the local park with my neighborhood group today!',
+      likes: 24,
+      comments: 8,
+      timeAgo: '2 hours ago',
     },
     {
       id: 2,
-      user: 'Mike R.',
-      action: 'Donated books to local library',
-      location: 'Downtown Library',
-      karma: 10,
-      time: '4h ago',
+      user: 'Marcus Johnson',
+      avatar: '🌟',
+      image: '🍲',
+      description:
+        'Cooked meals for the homeless shelter downtown. Nothing beats seeing smiles!',
+      likes: 31,
+      comments: 12,
+      timeAgo: '4 hours ago',
     },
     {
       id: 3,
-      user: 'Emma L.',
-      action: 'Organized community cleanup',
-      location: 'Central Park',
-      karma: 25,
-      time: '1d ago',
-    },
-  ];
-
-  const nearbyRequests: HelpRequest[] = [
-    {
-      id: 1,
-      request: 'Need help moving furniture',
-      user: 'John D.',
-      distance: '0.5 miles',
-      karma: 20,
+      user: 'Elena Rodriguez',
+      avatar: '🌻',
+      image: '📚',
+      description:
+        "Donated 20 books to the local library's children's section.",
+      likes: 18,
+      comments: 5,
+      timeAgo: '6 hours ago',
     },
     {
-      id: 2,
-      request: 'Looking for tutoring help',
-      user: 'Lisa K.',
-      distance: '1.2 miles',
-      karma: 15,
+      id: 4,
+      user: 'David Kim',
+      avatar: '🌱',
+      image: '🐕',
+      description:
+        'Volunteered at the animal rescue center - these pups made my day!',
+      likes: 42,
+      comments: 15,
+      timeAgo: '8 hours ago',
+    },
+    {
+      id: 5,
+      user: 'Maya Patel',
+      avatar: '🌈',
+      image: '👵',
+      description:
+        'Spent the afternoon reading to elderly residents at the care home.',
+      likes: 27,
+      comments: 9,
+      timeAgo: '10 hours ago',
     },
   ];
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        {/* Welcome Section */}
-        <View style={styles.welcomeCard}>
-          <Text style={styles.welcomeTitle}>Welcome back! 👋</Text>
-          <Text style={styles.karmaText}>
-            Your karma score: <Text style={styles.karmaValue}>142</Text>
-          </Text>
-        </View>
+      {/* Motivational Header */}
+      <View style={styles.header}>
+        <Text style={styles.motivationalText}>
+          Every good deed grows the world 🌱
+        </Text>
+        <Text style={styles.subText}>Together, we're making a difference</Text>
+      </View>
 
-        {/* Nearby Help Requests */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Help Requests Near You</Text>
-          {nearbyRequests.map(request => (
-            <TouchableOpacity key={request.id} style={styles.requestCard}>
-              <View style={styles.cardContent}>
-                <View style={styles.cardLeft}>
-                  <Text style={styles.requestTitle}>{request.request}</Text>
-                  <Text style={styles.requestMeta}>
-                    by {request.user} • {request.distance}
-                  </Text>
-                </View>
-                <View style={styles.karmaSection}>
-                  <Icon name="star" size={16} color="#F59E0B" />
-                  <Text style={styles.karmaPoints}>{request.karma}</Text>
-                </View>
+      {/* Good Deeds Feed */}
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {goodDeeds.map(deed => (
+          <View key={deed.id} style={styles.deedCard}>
+            {/* User Info */}
+            <View style={styles.userInfo}>
+              <View style={styles.avatarContainer}>
+                <Text style={styles.avatar}>{deed.avatar}</Text>
               </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Recent Good Deeds Feed */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Good Deeds</Text>
-          {mockDeeds.map(deed => (
-            <View key={deed.id} style={styles.deedCard}>
-              <View style={styles.cardContent}>
-                <View style={styles.cardLeft}>
-                  <Text style={styles.userName}>{deed.user}</Text>
-                  <Text style={styles.deedAction}>{deed.action}</Text>
-                  <Text style={styles.deedMeta}>
-                    {deed.location} • {deed.time}
-                  </Text>
-                </View>
-                <View style={styles.karmaSection}>
-                  <Icon name="favorite" size={16} color="#EF4444" />
-                  <Text style={styles.karmaEarned}>+{deed.karma}</Text>
-                </View>
-              </View>
-              <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Icon name="thumb-up" size={16} color="#6B7280" />
-                  <Text style={styles.actionText}>Appreciate</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Icon name="share" size={16} color="#6B7280" />
-                  <Text style={styles.actionText}>Share</Text>
-                </TouchableOpacity>
+              <View style={styles.userDetails}>
+                <Text style={styles.userName}>{deed.user}</Text>
+                <Text style={styles.timeAgo}>{deed.timeAgo}</Text>
               </View>
             </View>
-          ))}
-        </View>
+
+            {/* Deed Image */}
+            <View style={styles.deedImageContainer}>
+              <Text style={styles.deedImage}>{deed.image}</Text>
+            </View>
+
+            {/* Description */}
+            <Text style={styles.description}>{deed.description}</Text>
+
+            {/* Action Buttons */}
+            <View style={styles.actionBar}>
+              <TouchableOpacity style={styles.actionButton}>
+                <Icon name="favorite-border" size={18} color="#059669" />
+                <Text style={styles.actionText}>{deed.likes}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton}>
+                <Icon name="chat-bubble-outline" size={18} color="#059669" />
+                <Text style={styles.actionText}>{deed.comments}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton}>
+                <Icon name="share" size={18} color="#059669" />
+                <Text style={styles.actionText}>Share</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))}
       </ScrollView>
+
+      {/* Floating Action Button */}
+      <FloatingActionButton />
     </SafeAreaView>
   );
 };
@@ -126,134 +135,131 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#F9FAFB',
+  },
+  header: {
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+    alignItems: 'center',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    backgroundColor: '#F0FDF4',
+    borderBottomWidth: 3,
+    borderBottomColor: '#FEF3E0',
+  },
+  motivationalText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#065F46',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: 'System',
+  },
+  subText: {
+    fontSize: 14,
+    color: '#059669',
+    opacity: 0.8,
+    textAlign: 'center',
+    fontFamily: 'System',
   },
   scrollView: {
     flex: 1,
-    padding: 16,
   },
-  welcomeCard: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  welcomeTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 8,
-  },
-  karmaText: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  karmaValue: {
-    fontWeight: 'bold',
-    color: '#10B981',
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 12,
-  },
-  requestCard: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FB923C',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 100,
   },
   deedCard: {
-    backgroundColor: 'white',
-    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 16,
     padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F0FDF4',
   },
-  cardContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  cardLeft: {
-    flex: 1,
-    marginRight: 12,
-  },
-  requestTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  requestMeta: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  deedAction: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-  deedMeta: {
-    fontSize: 12,
-    color: '#9ca3af',
-  },
-  karmaSection: {
+  userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  karmaPoints: {
+  avatarContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 2,
+    borderColor: '#FEF3E0',
+  },
+  avatar: {
+    fontSize: 18,
+  },
+  userDetails: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  userName: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#F59E0B',
-    marginLeft: 4,
+    fontWeight: '600',
+    color: '#065F46',
+    fontFamily: 'System',
   },
-  karmaEarned: {
+  timeAgo: {
+    fontSize: 12,
+    color: '#059669',
+    opacity: 0.7,
+    marginTop: 2,
+    fontFamily: 'System',
+  },
+  deedImageContainer: {
+    width: '100%',
+    height: 120,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 2,
+    borderColor: '#FEF3E0',
+  },
+  deedImage: {
+    fontSize: 32,
+  },
+  description: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#EF4444',
-    marginLeft: 4,
+    color: '#374151',
+    lineHeight: 20,
+    marginBottom: 12,
+    fontFamily: 'System',
   },
-  actionRow: {
+  actionBar: {
     flexDirection: 'row',
-    marginTop: 12,
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0FDF4',
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 16,
+    paddingVertical: 4,
   },
   actionText: {
-    fontSize: 14,
-    color: '#6b7280',
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#059669',
     marginLeft: 4,
+    fontFamily: 'System',
   },
 });
 

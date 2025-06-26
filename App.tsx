@@ -40,18 +40,20 @@ const App: React.FC = () => {
 
             return <Icon name={iconName} size={size} color={color} />;
           },
-          tabBarActiveTintColor: '#10B981',
-          tabBarInactiveTintColor: '#6B7280',
+          tabBarActiveTintColor: '#059669',
+          tabBarInactiveTintColor: '#9CA3AF',
           tabBarStyle: {
             paddingBottom: 5,
             paddingTop: 5,
             height: 60,
             backgroundColor: '#ffffff',
+            borderTopWidth: 1,
+            borderTopColor: '#F0FDF4',
           },
           headerStyle: {
-            backgroundColor: '#10B981',
+            backgroundColor: '#F0FDF4',
           },
-          headerTintColor: '#fff',
+          headerTintColor: '#065F46',
           headerTitleStyle: {
             fontWeight: 'bold',
           },
@@ -60,7 +62,10 @@ const App: React.FC = () => {
         <Tab.Screen
           name="Home"
           component={HomeScreen}
-          options={{ title: 'Karma' }}
+          options={{
+            title: 'Karma',
+            headerShown: false,
+          }}
         />
         <Tab.Screen
           name="Explore"
@@ -75,7 +80,7 @@ const App: React.FC = () => {
         <Tab.Screen
           name="Impact"
           component={ImpactScreen}
-          options={{ title: 'Community Impact' }}
+          options={{ title: 'Karma Impact' }}
         />
         <Tab.Screen
           name="Profile"
