@@ -78,6 +78,11 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.gooddeedsapp"
+    
+    buildFeatures {
+        buildConfig true
+    }
+    
     defaultConfig {
         applicationId "com.gooddeedsapp"
         minSdkVersion rootProject.ext.minSdkVersion

@@ -11,6 +11,7 @@ import {
   Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -30,17 +31,18 @@ interface KarmaLevel {
 }
 
 const ProfileScreen: React.FC = () => {
+  const { user, signOut } = useAuth();
   const [isProfilePrivate, setIsProfilePrivate] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
 
   // User data (in a real app, this would come from state management or API)
   const userData = {
-    name: 'Ananya Sharma',
-    email: 'ananya.sharma@example.com',
+    name: user?.full_name || 'Karma User',
+    email: user?.email || 'user@example.com',
     avatar: '🌸',
     status: 'Doing good, one deed at a time 🌱',
-    karmaScore: 452,
+    karmaScore: user?.karma_score || 0,
     location: 'Vadodara, Gujarat',
     bio: 'Environmental advocate and community volunteer. Love organizing cleanup drives!',
     memberSince: 'May 2025',
@@ -55,22 +57,29 @@ const ProfileScreen: React.FC = () => {
   ];
 
   const getCurrentLevel = () => {
-    return karmaLevels.find(level => 
-      userData.karmaScore >= level.minPoints && userData.karmaScore <= level.maxPoints
-    ) || karmaLevels[0];
+    return (
+      karmaLevels.find(
+        level =>
+          userData.karmaScore >= level.minPoints &&
+          userData.karmaScore <= level.maxPoints,
+      ) || karmaLevels[0]
+    );
   };
 
   const getNextLevel = () => {
-    const currentLevelIndex = karmaLevels.findIndex(level => 
-      userData.karmaScore >= level.minPoints && userData.karmaScore <= level.maxPoints
+    const currentLevelIndex = karmaLevels.findIndex(
+      level =>
+        userData.karmaScore >= level.minPoints &&
+        userData.karmaScore <= level.maxPoints,
     );
     return karmaLevels[currentLevelIndex + 1] || null;
   };
 
   const getProgressPercentage = () => {
     const currentLevel = getCurrentLevel();
-    const progress = (userData.karmaScore - currentLevel.minPoints) / 
-                    (currentLevel.maxPoints - currentLevel.minPoints);
+    const progress =
+      (userData.karmaScore - currentLevel.minPoints) /
+      (currentLevel.maxPoints - currentLevel.minPoints);
     return Math.min(progress * 100, 100);
   };
 
@@ -111,24 +120,20 @@ const ProfileScreen: React.FC = () => {
   const handleEditAvatar = () => {
     Alert.alert(
       'Change Avatar 📸',
-      'Choose how you\'d like to update your profile picture',
+      "Choose how you'd like to update your profile picture",
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Choose Emoji', onPress: () => console.log('Emoji picker') },
         { text: 'Upload Photo', onPress: () => console.log('Photo picker') },
-      ]
+      ],
     );
   };
 
   const handleEditProfile = () => {
-    Alert.alert(
-      'Edit Profile ✏️',
-      'Update your name, bio, and location',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Edit', onPress: () => console.log('Navigate to edit profile') },
-      ]
-    );
+    Alert.alert('Edit Profile ✏️', 'Update your name, bio, and location', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Edit', onPress: () => console.log('Navigate to edit profile') },
+    ]);
   };
 
   const handleViewFullKarma = () => {
@@ -137,8 +142,11 @@ const ProfileScreen: React.FC = () => {
       'Navigate to your full Karma Impact screen to see detailed progress and achievements!',
       [
         { text: 'Stay Here', style: 'cancel' },
-        { text: 'View Impact', onPress: () => console.log('Navigate to Impact screen') },
-      ]
+        {
+          text: 'View Impact',
+          onPress: () => console.log('Navigate to Impact screen'),
+        },
+      ],
     );
   };
 
@@ -148,8 +156,11 @@ const ProfileScreen: React.FC = () => {
       'Customize what notifications you receive',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Manage', onPress: () => console.log('Navigate to notification settings') },
-      ]
+        {
+          text: 'Manage',
+          onPress: () => console.log('Navigate to notification settings'),
+        },
+      ],
     );
   };
 
@@ -159,8 +170,18 @@ const ProfileScreen: React.FC = () => {
       'Are you sure you want to logout? Your karma progress will be saved.',
       [
         { text: 'Stay Logged In', style: 'cancel' },
-        { text: 'Logout', style: 'destructive', onPress: () => console.log('Logout user') },
-      ]
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ],
     );
   };
 
@@ -170,27 +191,34 @@ const ProfileScreen: React.FC = () => {
       'This action cannot be undone. All your karma points and deeds will be permanently lost.',
       [
         { text: 'Keep Account', style: 'cancel' },
-        { 
-          text: 'Delete Forever', 
-          style: 'destructive', 
+        {
+          text: 'Delete Forever',
+          style: 'destructive',
           onPress: () => {
             Alert.alert(
               'Final Confirmation',
               'Type "DELETE" to confirm account deletion',
               [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Proceed', style: 'destructive', onPress: () => console.log('Delete account') },
-              ]
+                {
+                  text: 'Proceed',
+                  style: 'destructive',
+                  onPress: () => console.log('Delete account'),
+                },
+              ],
             );
-          }
+          },
         },
-      ]
+      ],
     );
   };
 
   const renderProfileHeader = () => (
     <View style={styles.profileHeader}>
-      <TouchableOpacity style={styles.avatarContainer} onPress={handleEditAvatar}>
+      <TouchableOpacity
+        style={styles.avatarContainer}
+        onPress={handleEditAvatar}
+      >
         <View style={styles.avatar}>
           <Text style={styles.avatarEmoji}>{userData.avatar}</Text>
         </View>
@@ -198,7 +226,7 @@ const ProfileScreen: React.FC = () => {
           <Icon name="edit" size={12} color="#FFFFFF" />
         </View>
       </TouchableOpacity>
-      
+
       <View style={styles.profileInfo}>
         <Text style={styles.userName}>{userData.name}</Text>
         <Text style={styles.userStatus}>{userData.status}</Text>
@@ -207,8 +235,11 @@ const ProfileScreen: React.FC = () => {
           <Text style={styles.karmaLevelText}>{currentLevel.name}</Text>
         </View>
       </View>
-      
-      <TouchableOpacity style={styles.editProfileButton} onPress={handleEditProfile}>
+
+      <TouchableOpacity
+        style={styles.editProfileButton}
+        onPress={handleEditProfile}
+      >
         <Icon name="edit" size={16} color="#059669" />
       </TouchableOpacity>
     </View>
@@ -222,29 +253,33 @@ const ProfileScreen: React.FC = () => {
           <Text style={styles.karmaScoreNumber}>{userData.karmaScore}</Text>
           <Text style={styles.karmaScoreLabel}>Karma Points</Text>
         </View>
-        
+
         <View style={styles.karmaLevelSection}>
           <Text style={styles.karmaCurrentLevel}>
             Level: {currentLevel.name} {currentLevel.emoji}
           </Text>
           <View style={styles.progressBarContainer}>
             <View style={styles.progressBarTrack}>
-              <View 
+              <View
                 style={[
-                  styles.progressBarFill, 
-                  { width: `${getProgressPercentage()}%` }
-                ]} 
+                  styles.progressBarFill,
+                  { width: `${getProgressPercentage()}%` },
+                ]}
               />
             </View>
             {nextLevel && (
               <Text style={styles.progressText}>
-                {nextLevel.minPoints - userData.karmaScore} points to {nextLevel.name} {nextLevel.emoji}
+                {nextLevel.minPoints - userData.karmaScore} points to{' '}
+                {nextLevel.name} {nextLevel.emoji}
               </Text>
             )}
           </View>
         </View>
-        
-        <TouchableOpacity style={styles.viewFullKarmaButton} onPress={handleViewFullKarma}>
+
+        <TouchableOpacity
+          style={styles.viewFullKarmaButton}
+          onPress={handleViewFullKarma}
+        >
           <Text style={styles.viewFullKarmaText}>View Full Karma Impact</Text>
           <Icon name="arrow-forward" size={16} color="#059669" />
         </TouchableOpacity>
@@ -256,9 +291,11 @@ const ProfileScreen: React.FC = () => {
     <View style={styles.quickStatsContainer}>
       <Text style={styles.sectionTitle}>Quick Stats 📊</Text>
       <View style={styles.statsGrid}>
-        {quickStats.map((stat) => (
+        {quickStats.map(stat => (
           <View key={stat.id} style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: `${stat.color}20` }]}>
+            <View
+              style={[styles.statIcon, { backgroundColor: `${stat.color}20` }]}
+            >
               <Icon name={stat.icon} size={20} color={stat.color} />
             </View>
             <Text style={styles.statValue}>{stat.value}</Text>
@@ -272,7 +309,7 @@ const ProfileScreen: React.FC = () => {
   const renderSettings = () => (
     <View style={styles.settingsContainer}>
       <Text style={styles.sectionTitle}>Settings & Preferences ⚙️</Text>
-      
+
       {/* Privacy Settings */}
       <View style={styles.settingItem}>
         <View style={styles.settingLeft}>
@@ -318,7 +355,10 @@ const ProfileScreen: React.FC = () => {
         />
       </View>
 
-      <TouchableOpacity style={styles.settingItem} onPress={handleNotificationSettings}>
+      <TouchableOpacity
+        style={styles.settingItem}
+        onPress={handleNotificationSettings}
+      >
         <View style={styles.settingLeft}>
           <Icon name="tune" size={20} color="#6B7280" />
           <Text style={styles.settingLabel}>Notification Preferences</Text>
@@ -332,7 +372,9 @@ const ProfileScreen: React.FC = () => {
           <Icon name="palette" size={20} color="#6B7280" />
           <Text style={styles.settingLabel}>App Theme</Text>
         </View>
-        <Text style={styles.settingValue}>{theme === 'system' ? 'System' : theme === 'light' ? 'Light' : 'Dark'}</Text>
+        <Text style={styles.settingValue}>
+          {theme === 'system' ? 'System' : theme === 'light' ? 'Light' : 'Dark'}
+        </Text>
       </View>
     </View>
   );
@@ -340,18 +382,18 @@ const ProfileScreen: React.FC = () => {
   const renderAccountInfo = () => (
     <View style={styles.accountContainer}>
       <Text style={styles.sectionTitle}>Account Information 📄</Text>
-      
+
       <View style={styles.accountInfoCard}>
         <View style={styles.accountInfoItem}>
           <Text style={styles.accountInfoLabel}>Email</Text>
           <Text style={styles.accountInfoValue}>{userData.email}</Text>
         </View>
-        
+
         <View style={styles.accountInfoItem}>
           <Text style={styles.accountInfoLabel}>Member Since</Text>
           <Text style={styles.accountInfoValue}>{userData.memberSince}</Text>
         </View>
-        
+
         <View style={styles.accountInfoItem}>
           <Text style={styles.accountInfoLabel}>Location</Text>
           <Text style={styles.accountInfoValue}>{userData.location}</Text>
@@ -364,7 +406,10 @@ const ProfileScreen: React.FC = () => {
         <Text style={styles.logoutButtonText}>Logout</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={handleDeleteAccount}
+      >
         <Text style={styles.deleteButtonText}>Delete Account</Text>
       </TouchableOpacity>
     </View>
@@ -372,7 +417,7 @@ const ProfileScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karma Auth Test - Debug</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #F9FAFB;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #065F46;
+            text-align: center;
+        }
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            margin: 8px 0;
+            border: 1px solid #E5E7EB;
+            border-radius: 12px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            background: #10B981;
+            color: white;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 8px 0;
+            cursor: pointer;
+        }
+        button:hover { background: #059669; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        
+        .result {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 14px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .success {
+            background: #F0FDF4;
+            border: 1px solid #BBF7D0;
+            color: #065F46;
+        }
+        .error {
+            background: #FEF2F2;
+            border: 1px solid #FECACA;
+            color: #991B1B;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌱 Karma Auth Test - Debug Version</h1>
+        
+        <button onclick="testEverything()">🔍 Run Full Diagnostic</button>
+        
+        <div id="diagnostic-result"></div>
+    </div>
+
+    <div class="container">
+        <h2>Manual Tests</h2>
+        
+        <input type="email" id="email" placeholder="Email" value="test@karmaapp.com">
+        <input type="password" id="password" placeholder="Password" value="password123">
+        <input type="text" id="fullname" placeholder="Full Name" value="Test User">
+        
+        <button onclick="testSignUp()">🆕 Test Sign Up (Create Profile)</button>
+        <button onclick="testSignIn()">🔑 Test Sign In</button>
+        <button onclick="checkAuthUsers()">👥 Check Auth Users</button>
+        <button onclick="checkProfiles()">📄 Check Profiles Table</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const supabaseUrl = 'https://lwqeyvyooawldhpndlru.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3cWV5dnlvb2F3bGRocG5kbHJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4Njc3NTQsImV4cCI6MjA2NjQ0Mzc1NH0.bx1rXIsURS090p1hS-4S8aMxe_3YDrPXnjRobeaUvOo';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        
+        function showResult(message, isError = false, elementId = 'result') {
+            const result = document.getElementById(elementId);
+            result.textContent = message;
+            result.className = `result ${isError ? 'error' : 'success'}`;
+            console.log(message);
+        }
+        
+        async function testEverything() {
+            let report = '🔍 KARMA AUTH DIAGNOSTIC REPORT\n';
+            report += '='.repeat(50) + '\n\n';
+            
+            try {
+                // Test 1: Connection
+                report += '1. Testing Supabase Connection...\n';
+                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+                if (sessionError) {
+                    report += `   ❌ Connection failed: ${sessionError.message}\n\n`;
+                } else {
+                    report += `   ✅ Connection successful\n`;
+                    report += `   Current session: ${sessionData.session ? 'Logged in' : 'Not logged in'}\n\n`;
+                }
+                
+                // Test 2: Check existing auth users
+                report += '2. Checking Auth Users...\n';
+                // Note: We can't directly query auth.users from client, but we can check current session
+                if (sessionData.session) {
+                    report += `   ✅ Current user: ${sessionData.session.user.email}\n`;
+                    report += `   User ID: ${sessionData.session.user.id}\n`;
+                    report += `   Created: ${new Date(sessionData.session.user.created_at).toLocaleString()}\n\n`;
+                } else {
+                    report += `   ℹ️  No current session (not logged in)\n\n`;
+                }
+                
+                // Test 3: Check profiles table
+                report += '3. Checking Profiles Table...\n';
+                const { data: profiles, error: profilesError } = await supabase
+                    .from('profiles')
+                    .select('*');
+                
+                if (profilesError) {
+                    report += `   ❌ Profiles query failed: ${profilesError.message}\n\n`;
+                } else {
+                    report += `   ✅ Profiles table accessible\n`;
+                    report += `   Found ${profiles.length} profiles:\n`;
+                    profiles.forEach((profile, index) => {
+                        report += `   ${index + 1}. ${profile.email} (${profile.full_name || 'No name'}) - Karma: ${profile.karma_score}\n`;
+                    });
+                    report += '\n';
+                }
+                
+                // Test 4: Check table permissions
+                report += '4. Testing Table Permissions...\n';
+                try {
+                    const { data: testData, error: testError } = await supabase
+                        .from('profiles')
+                        .select('count')
+                        .limit(1);
+                    
+                    if (testError) {
+                        report += `   ❌ RLS might be blocking: ${testError.message}\n\n`;
+                    } else {
+                        report += `   ✅ Table permissions OK\n\n`;
+                    }
+                } catch (err) {
+                    report += `   ❌ Permission test failed: ${err.message}\n\n`;
+                }
+                
+                report += '='.repeat(50) + '\n';
+                report += 'RECOMMENDATIONS:\n';
+                
+                if (profiles && profiles.length === 0) {
+                    report += '• No profiles found. Try creating a new user with "Test Sign Up"\n';
+                }
+                
+                if (!sessionData.session) {
+                    report += '• Not logged in. Try "Test Sign In" with existing credentials\n';
+                }
+                
+                report += '• Check your Supabase dashboard: Authentication > Users\n';
+                report += '• Check your Supabase dashboard: Table Editor > profiles\n';
+                
+            } catch (err) {
+                report += `\n❌ CRITICAL ERROR: ${err.message}\n`;
+            }
+            
+            showResult(report, false, 'diagnostic-result');
+        }
+        
+        async function testSignUp() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const fullName = document.getElementById('fullname').value;
+            
+            if (!email || !password || !fullName) {
+                showResult('Please fill in all fields', true);
+                return;
+            }
+            
+            try {
+                showResult('Creating user and profile...');
+                
+                // Step 1: Create auth user
+                const { data: authData, error: authError } = await supabase.auth.signUp({
+                    email: email,
+                    password: password,
+                });
+                
+                if (authError) {
+                    showResult(`❌ Auth Signup Error: ${authError.message}`, true);
+                    return;
+                }
+                
+                console.log('Auth user created:', authData.user);
+                
+                // Step 2: Create profile (if user was created)
+                if (authData.user) {
+                    const { data: profileData, error: profileError } = await supabase
+                        .from('profiles')
+                        .insert({
+                            id: authData.user.id,
+                            email: authData.user.email,
+                            full_name: fullName,
+                            karma_score: 0,
+                        })
+                        .select();
+                    
+                    if (profileError) {
+                        showResult(`✅ User created but profile failed: ${profileError.message}\nUser ID: ${authData.user.id}\nEmail: ${authData.user.email}`, true);
+                    } else {
+                        showResult(`✅ SUCCESS! User and profile created!\nEmail: ${authData.user.email}\nProfile: ${JSON.stringify(profileData, null, 2)}`);
+                    }
+                } else {
+                    showResult('❌ No user object returned', true);
+                }
+                
+            } catch (err) {
+                showResult(`❌ Signup failed: ${err.message}`, true);
+            }
+        }
+        
+        async function testSignIn() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                showResult('Signing in...');
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password,
+                });
+                
+                if (error) {
+                    showResult(`❌ Login Error: ${error.message}`, true);
+                } else {
+                    showResult(`✅ Login successful!\nEmail: ${data.user?.email}\nID: ${data.user?.id}`);
+                }
+            } catch (err) {
+                showResult(`❌ Login failed: ${err.message}`, true);
+            }
+        }
+        
+        async function checkAuthUsers() {
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error) {
+                    showResult(`❌ Session Error: ${error.message}`, true);
+                } else if (session) {
+                    showResult(`✅ Current auth user:\nEmail: ${session.user.email}\nID: ${session.user.id}\nCreated: ${new Date(session.user.created_at).toLocaleString()}\nEmail confirmed: ${session.user.email_confirmed_at ? 'Yes' : 'No'}`);
+                } else {
+                    showResult('❌ No active session. Try signing in first.', true);
+                }
+            } catch (err) {
+                showResult(`❌ Check failed: ${err.message}`, true);
+            }
+        }
+        
+        async function checkProfiles() {
+            try {
+                showResult('Checking profiles table...');
+                const { data: profiles, error } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) {
+                    showResult(`❌ Profiles Error: ${error.message}`, true);
+                } else {
+                    if (profiles.length === 0) {
+                        showResult('ℹ️  No profiles found in table. Try creating a user first.');
+                    } else {
+                        let result = `✅ Found ${profiles.length} profiles:\n\n`;
+                        profiles.forEach((profile, index) => {
+                            result += `${index + 1}. Email: ${profile.email}\n`;
+                            result += `   Name: ${profile.full_name || 'Not set'}\n`;
+                            result += `   Karma: ${profile.karma_score}\n`;
+                            result += `   Created: ${new Date(profile.created_at).toLocaleString()}\n\n`;
+                        });
+                        showResult(result);
+                    }
+                }
+            } catch (err) {
+                showResult(`❌ Check failed: ${err.message}`, true);
+            }
+        }
+        
+        // Auto-run diagnostic on load
+        window.onload = () => {
+            setTimeout(testEverything, 500);
+        };
+    </script>
+</body>
+</html>

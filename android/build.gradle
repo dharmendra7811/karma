@@ -2,10 +2,11 @@
 
 buildscript {
     ext {
-        buildToolsVersion = "33.0.0"
+        buildToolsVersion = "34.0.0"
         minSdkVersion = 21
-        compileSdkVersion = 33
-        targetSdkVersion = 33
+        compileSdkVersion = 34
+        targetSdkVersion = 34
+        kotlinVersion = "1.9.0"
 
         // We use NDK 23 which has both M1 support and is the side-by-side NDK version from AGP.
         ndkVersion = "23.1.7779620"
@@ -15,7 +16,37 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:7.4.2")
+        classpath("com.android.tools.build:gradle:8.1.4")
         classpath("com.facebook.react:react-native-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://www.jitpack.io' }
+    }
+    
+    // Fix Kotlin version conflicts by forcing same version for all Kotlin modules
+    configurations.all {
+        resolutionStrategy {
+            force "org.jetbrains.kotlin:kotlin-stdlib:1.9.0"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.0"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.0"
+            force "org.jetbrains.kotlin:kotlin-stdlib-common:1.9.0"
+        }
+    }
+    
+    // Enable BuildConfig for all Android projects to fix compatibility with AGP 8.x
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                buildFeatures {
+                    buildConfig true
+                }
+            }
+        }
     }
 }
