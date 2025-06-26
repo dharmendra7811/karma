@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,26 +7,13 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  Dimensions,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-
-const { width, height } = Dimensions.get('window');
-
-interface Activity {
-  id: string;
-  title: string;
-  description: string;
-  date: string;
-  time: string;
-  location: string;
-  category: string;
-  participants: number;
-  maxParticipants?: number;
-  latitude: number;
-  longitude: number;
-  organizer: string;
-}
+import { ActivityService, CommunityActivity } from '../lib/activityService';
+import { DeedService } from '../lib/deedService';
+import { DeedCategory } from '../lib/supabase';
 
 interface FilterOption {
   id: string;
@@ -35,242 +22,212 @@ interface FilterOption {
 }
 
 const ExploreScreen: React.FC = () => {
-  const [viewMode, setViewMode] = useState<'map' | 'list'>('list');
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [viewMode, setViewMode] = useState<'list'>('list'); // Removed map for now
+  const [activities, setActivities] = useState<CommunityActivity[]>([]);
+  const [categories, setCategories] = useState<DeedCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<{
     category: string;
-    date: string;
-    distance: string;
+    status: string;
   }>({
     category: 'all',
-    date: 'all',
-    distance: 'all',
+    status: 'upcoming',
   });
 
-  const mockActivities: Activity[] = [
-    {
-      id: '1',
-      title: 'Community Garden Cleanup',
-      description: 'Help us maintain our beautiful community garden. Bring gloves and enthusiasm!',
-      date: 'June 28, 2025',
-      time: '9:00 AM',
-      location: 'Central Community Garden',
-      category: 'environment',
-      participants: 12,
-      maxParticipants: 20,
-      latitude: 22.3072,
-      longitude: 73.1812,
-      organizer: 'Green Earth Society',
-    },
-    {
-      id: '2',
-      title: 'Free Coding Workshop',
-      description: 'Learn basic web development skills. Laptops will be provided for beginners.',
-      date: 'June 29, 2025',
-      time: '2:00 PM',
-      location: 'Tech Hub Vadodara',
-      category: 'education',
-      participants: 8,
-      maxParticipants: 15,
-      latitude: 22.3039,
-      longitude: 73.1810,
-      organizer: 'CodeForGood',
-    },
-    {
-      id: '3',
-      title: 'Senior Citizens Visit',
-      description: 'Spend time with elderly residents, share stories and bring smiles.',
-      date: 'June 30, 2025',
-      time: '10:30 AM',
-      location: 'Sunset Care Home',
-      category: 'helping',
-      participants: 6,
-      maxParticipants: 10,
-      latitude: 22.3000,
-      longitude: 73.1850,
-      organizer: 'Caring Hearts',
-    },
-    {
-      id: '4',
-      title: 'Beach Cleanup Drive',
-      description: 'Join us to clean up the local waterfront and protect marine life.',
-      date: 'July 1, 2025',
-      time: '6:00 AM',
-      location: 'Narmada Riverfront',
-      category: 'environment',
-      participants: 25,
-      maxParticipants: 50,
-      latitude: 22.3200,
-      longitude: 73.1700,
-      organizer: 'Ocean Guardians',
-    },
-    {
-      id: '5',
-      title: 'Food Distribution',
-      description: 'Help distribute meals to underprivileged families in our community.',
-      date: 'July 2, 2025',
-      time: '7:00 PM',
-      location: 'Community Center',
-      category: 'helping',
-      participants: 15,
-      latitude: 22.2950,
-      longitude: 73.1900,
-      organizer: 'Feed Forward',
-    },
-  ];
+  useEffect(() => {
+    loadData();
+  }, [selectedFilters]);
 
-  const categoryFilters: FilterOption[] = [
-    { id: 'all', label: 'All', icon: 'apps' },
-    { id: 'environment', label: 'Environment', icon: 'eco' },
-    { id: 'helping', label: 'Helping', icon: 'favorite' },
-    { id: 'education', label: 'Education', icon: 'school' },
-    { id: 'health', label: 'Health', icon: 'local-hospital' },
-  ];
+  const loadData = async () => {
+    try {
+      const [activitiesData, categoriesData] = await Promise.all([
+        ActivityService.getActivities({
+          status: selectedFilters.status === 'all' ? undefined : selectedFilters.status,
+          category_id: selectedFilters.category === 'all' ? undefined : selectedFilters.category,
+          upcoming_only: selectedFilters.status === 'upcoming',
+        }),
+        DeedService.getCategories(),
+      ]);
 
-  const dateFilters: FilterOption[] = [
-    { id: 'all', label: 'Any Time', icon: 'schedule' },
-    { id: 'today', label: 'Today', icon: 'today' },
-    { id: 'week', label: 'This Week', icon: 'date-range' },
-    { id: 'month', label: 'This Month', icon: 'event' },
-  ];
-
-  const distanceFilters: FilterOption[] = [
-    { id: 'all', label: 'Any Distance', icon: 'near-me' },
-    { id: '1km', label: 'Within 1km', icon: 'location-on' },
-    { id: '5km', label: 'Within 5km', icon: 'location-on' },
-    { id: '10km', label: 'Within 10km', icon: 'location-on' },
-  ];
-
-  const getCategoryEmoji = (category: string) => {
-    switch (category) {
-      case 'environment': return '🌱';
-      case 'helping': return '🤝';
-      case 'education': return '📚';
-      case 'health': return '🏥';
-      default: return '🌟';
+      setActivities(activitiesData);
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Failed to load explore data:', error);
+      Alert.alert('Error', 'Failed to load activities');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleJoinActivity = (activity: Activity) => {
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const categoryFilters: FilterOption[] = [
+    { id: 'all', label: 'All', icon: 'apps' },
+    ...categories.map(cat => ({
+      id: cat.id,
+      label: cat.name,
+      icon: cat.icon || 'category'
+    }))
+  ];
+
+  const statusFilters: FilterOption[] = [
+    { id: 'upcoming', label: 'Upcoming', icon: 'schedule' },
+    { id: 'all', label: 'All Status', icon: 'list' },
+    { id: 'ongoing', label: 'Ongoing', icon: 'play-circle' },
+    { id: 'completed', label: 'Completed', icon: 'check-circle' },
+  ];
+
+  const getCategoryInfo = (categoryId?: string) => {
+    const category = categories.find(cat => cat.id === categoryId);
+    return {
+      name: category?.name || 'General',
+      icon: category?.icon || 'category',
+      color: category?.color || '#10B981'
+    };
+  };
+
+  const formatDateTime = (date: string, time: string) => {
+    const activityDate = new Date(date);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    let dateStr = '';
+    if (activityDate.toDateString() === today.toDateString()) {
+      dateStr = 'Today';
+    } else if (activityDate.toDateString() === tomorrow.toDateString()) {
+      dateStr = 'Tomorrow';
+    } else {
+      dateStr = activityDate.toLocaleDateString();
+    }
+
+    return `${dateStr} • ${time}`;
+  };
+
+  const handleJoinActivity = async (activity: CommunityActivity) => {
+    if (activity.max_participants && activity.current_participants >= activity.max_participants) {
+      Alert.alert('Activity Full', 'This activity has reached its maximum number of participants.');
+      return;
+    }
+
     Alert.alert(
       `Join "${activity.title}"? 🌟`,
-      `Are you ready to make a positive impact with ${activity.organizer}?`,
+      `Are you ready to make a positive impact?`,
       [
         { text: 'Not Yet', style: 'cancel' },
         { 
           text: 'Count Me In!', 
-          onPress: () => {
-            Alert.alert(
-              'Awesome! 🎉',
-              `You've successfully joined "${activity.title}". The organizer will send you details soon.`,
-              [{ text: 'Great!', style: 'default' }]
-            );
+          onPress: async () => {
+            try {
+              await ActivityService.joinActivity(activity.id);
+              Alert.alert(
+                'Awesome! 🎉',
+                `You've successfully joined "${activity.title}". Check back for updates from the organizer.`,
+                [{ text: 'Great!', style: 'default' }]
+              );
+              // Refresh the list to show updated participant count
+              loadData();
+            } catch (error) {
+              console.error('Failed to join activity:', error);
+              Alert.alert('Error', 'Failed to join activity. Please try again.');
+            }
           }
         }
       ]
     );
   };
 
-  const handleCreateActivity = () => {
-    Alert.alert(
-      'Create New Activity 🌍',
-      'Ready to organize something amazing for your community?',
-      [
-        { text: 'Not Now', style: 'cancel' },
-        { text: 'Let\'s Do It!', onPress: () => console.log('Navigate to create activity') }
-      ]
-    );
-  };
+  const renderActivityCard = (activity: CommunityActivity) => {
+    const categoryInfo = getCategoryInfo(activity.category_id);
+    const isPastEvent = new Date(activity.activity_date) < new Date();
 
-  const filteredActivities = mockActivities.filter(activity => {
-    if (selectedFilters.category !== 'all' && activity.category !== selectedFilters.category) {
-      return false;
-    }
-    // Add date and distance filtering logic here in a real app
-    return true;
-  });
-
-  const renderActivityCard = (activity: Activity, isMapPreview: boolean = false) => (
-    <View style={[styles.activityCard, isMapPreview && styles.mapPreviewCard]}>
-      <View style={styles.activityHeader}>
-        <View style={styles.categoryBadge}>
-          <Text style={styles.categoryEmoji}>{getCategoryEmoji(activity.category)}</Text>
-          <Text style={styles.categoryText}>{activity.category}</Text>
+    return (
+      <View style={[styles.activityCard, isPastEvent && styles.pastActivityCard]}>
+        <View style={styles.activityHeader}>
+          <View style={[styles.categoryBadge, { backgroundColor: categoryInfo.color + '20' }]}>
+            <Icon name={categoryInfo.icon} size={14} color={categoryInfo.color} />
+            <Text style={[styles.categoryText, { color: categoryInfo.color }]}>
+              {categoryInfo.name}
+            </Text>
+          </View>
+          <View style={styles.participantsInfo}>
+            <Icon name="people" size={16} color="#059669" />
+            <Text style={styles.participantsText}>
+              {activity.current_participants}
+              {activity.max_participants ? `/${activity.max_participants}` : ''}
+            </Text>
+          </View>
         </View>
-        <View style={styles.participantsInfo}>
-          <Icon name="people" size={16} color="#059669" />
-          <Text style={styles.participantsText}>
-            {activity.participants}{activity.maxParticipants ? `/${activity.maxParticipants}` : ''}
-          </Text>
-        </View>
-      </View>
-      
-      <Text style={styles.activityTitle}>{activity.title}</Text>
-      
-      {!isMapPreview && (
+        
+        <Text style={styles.activityTitle}>{activity.title}</Text>
+        
         <Text style={styles.activityDescription} numberOfLines={2}>
           {activity.description}
         </Text>
-      )}
-      
-      <View style={styles.activityMeta}>
-        <View style={styles.metaItem}>
-          <Icon name="schedule" size={16} color="#6B7280" />
-          <Text style={styles.metaText}>{activity.date} • {activity.time}</Text>
-        </View>
-        <View style={styles.metaItem}>
-          <Icon name="place" size={16} color="#6B7280" />
-          <Text style={styles.metaText}>{activity.location}</Text>
-        </View>
-        {!isMapPreview && (
+        
+        <View style={styles.activityMeta}>
           <View style={styles.metaItem}>
-            <Icon name="person" size={16} color="#6B7280" />
-            <Text style={styles.metaText}>by {activity.organizer}</Text>
+            <Icon name="schedule" size={16} color="#6B7280" />
+            <Text style={styles.metaText}>
+              {formatDateTime(activity.activity_date, activity.activity_time)}
+            </Text>
           </View>
+          {activity.location && (
+            <View style={styles.metaItem}>
+              <Icon name="place" size={16} color="#6B7280" />
+              <Text style={styles.metaText}>{activity.location}</Text>
+            </View>
+          )}
+          {activity.creator && (
+            <View style={styles.metaItem}>
+              <Icon name="person" size={16} color="#6B7280" />
+              <Text style={styles.metaText}>
+                by {activity.creator.full_name || activity.creator.username || 'Anonymous'}
+              </Text>
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.statusContainer}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(activity.status) }]}>
+            <Text style={styles.statusText}>{activity.status.toUpperCase()}</Text>
+          </View>
+        </View>
+        
+        {activity.status === 'upcoming' && !isPastEvent && (
+          <TouchableOpacity 
+            style={[
+              styles.joinButton,
+              (activity.max_participants && activity.current_participants >= activity.max_participants) && 
+              styles.joinButtonDisabled
+            ]}
+            onPress={() => handleJoinActivity(activity)}
+            disabled={activity.max_participants && activity.current_participants >= activity.max_participants}
+          >
+            <Text style={styles.joinButtonText}>
+              {(activity.max_participants && activity.current_participants >= activity.max_participants) 
+                ? 'Activity Full' : 'Join Activity'}
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
-      
-      <TouchableOpacity 
-        style={styles.joinButton}
-        onPress={() => handleJoinActivity(activity)}
-      >
-        <Text style={styles.joinButtonText}>Join Activity</Text>
-      </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
-  const renderMapView = () => (
-    <View style={styles.mapContainer}>
-      <View style={styles.mapPlaceholder}>
-        <Icon name="map" size={48} color="#10B981" />
-        <Text style={styles.mapPlaceholderText}>Interactive Map Coming Soon</Text>
-        <Text style={styles.mapSubText}>
-          Tap pins to see activity details
-        </Text>
-      </View>
-      
-      {/* Mock pin preview */}
-      {selectedActivity && (
-        <View style={styles.mapPreview}>
-          {renderActivityCard(selectedActivity, true)}
-        </View>
-      )}
-    </View>
-  );
-
-  const renderListView = () => (
-    <ScrollView 
-      style={styles.listContainer}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.listContent}
-    >
-      {filteredActivities.map((activity) => (
-        <View key={activity.id}>
-          {renderActivityCard(activity)}
-        </View>
-      ))}
-    </ScrollView>
-  );
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'upcoming': return '#FEF3C7';
+      case 'ongoing': return '#DBEAFE';
+      case 'completed': return '#D1FAE5';
+      case 'cancelled': return '#FEE2E2';
+      default: return '#F3F4F6';
+    }
+  };
 
   const renderFilterChips = (
     filters: FilterOption[], 
@@ -308,40 +265,23 @@ const ExploreScreen: React.FC = () => {
     </ScrollView>
   );
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#10B981" />
+          <Text style={styles.loadingText}>Loading community activities...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Explore Nearby Activities 🌍</Text>
+        <Text style={styles.headerTitle}>Explore Community Activities 🌍</Text>
         <Text style={styles.headerSubtitle}>Find ways to make a difference together</Text>
-      </View>
-
-      {/* View Toggle */}
-      <View style={styles.viewToggle}>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'list' && styles.toggleButtonActive]}
-          onPress={() => setViewMode('list')}
-        >
-          <Icon name="list" size={20} color={viewMode === 'list' ? '#065F46' : '#6B7280'} />
-          <Text style={[
-            styles.toggleText,
-            viewMode === 'list' && styles.toggleTextActive
-          ]}>
-            List
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'map' && styles.toggleButtonActive]}
-          onPress={() => setViewMode('map')}
-        >
-          <Icon name="map" size={20} color={viewMode === 'map' ? '#065F46' : '#6B7280'} />
-          <Text style={[
-            styles.toggleText,
-            viewMode === 'map' && styles.toggleTextActive
-          ]}>
-            Map
-          </Text>
-        </TouchableOpacity>
       </View>
 
       {/* Filters */}
@@ -353,30 +293,41 @@ const ExploreScreen: React.FC = () => {
           (value) => setSelectedFilters({...selectedFilters, category: value})
         )}
         
-        <Text style={styles.filterLabel}>When:</Text>
+        <Text style={styles.filterLabel}>Status:</Text>
         {renderFilterChips(
-          dateFilters, 
-          selectedFilters.date, 
-          (value) => setSelectedFilters({...selectedFilters, date: value})
-        )}
-        
-        <Text style={styles.filterLabel}>Distance:</Text>
-        {renderFilterChips(
-          distanceFilters, 
-          selectedFilters.distance, 
-          (value) => setSelectedFilters({...selectedFilters, distance: value})
+          statusFilters, 
+          selectedFilters.status, 
+          (value) => setSelectedFilters({...selectedFilters, status: value})
         )}
       </View>
 
-      {/* Content */}
-      {viewMode === 'map' ? renderMapView() : renderListView()}
-
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab} onPress={handleCreateActivity}>
-        <View style={styles.fabInner}>
-          <Icon name="add" size={24} color="#FFFFFF" />
-        </View>
-      </TouchableOpacity>
+      {/* Activities List */}
+      <ScrollView 
+        style={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {activities.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Icon name="event-available" size={48} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>No activities found</Text>
+            <Text style={styles.emptyText}>
+              {selectedFilters.category !== 'all' || selectedFilters.status !== 'upcoming'
+                ? 'Try adjusting your filters to see more activities.'
+                : 'Be the first to create a community activity!'}
+            </Text>
+          </View>
+        ) : (
+          activities.map((activity) => (
+            <View key={activity.id}>
+              {renderActivityCard(activity)}
+            </View>
+          ))
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -386,12 +337,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
+  },
   header: {
     paddingHorizontal: 20,
     paddingVertical: 20,
     backgroundColor: '#F0FDF4',
-    borderBottomWidth: 2,
-    borderBottomColor: '#FEF3E0',
   },
   headerTitle: {
     fontSize: 20,
@@ -399,47 +358,11 @@ const styles = StyleSheet.create({
     color: '#065F46',
     textAlign: 'center',
     marginBottom: 4,
-    fontFamily: 'System',
   },
   headerSubtitle: {
     fontSize: 14,
     color: '#059669',
     textAlign: 'center',
-    fontFamily: 'System',
-  },
-  viewToggle: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 12,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  toggleButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  toggleButtonActive: {
-    backgroundColor: '#F0FDF4',
-  },
-  toggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginLeft: 6,
-    fontFamily: 'System',
-  },
-  toggleTextActive: {
-    color: '#065F46',
   },
   filtersSection: {
     paddingHorizontal: 16,
@@ -451,7 +374,6 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginBottom: 8,
     marginTop: 8,
-    fontFamily: 'System',
   },
   filterScroll: {
     marginBottom: 8,
@@ -478,46 +400,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     marginLeft: 4,
-    fontFamily: 'System',
   },
   filterChipTextSelected: {
     color: '#065F46',
     fontWeight: '600',
-  },
-  mapContainer: {
-    flex: 1,
-    margin: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  mapPlaceholder: {
-    flex: 1,
-    backgroundColor: '#F0FDF4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-  },
-  mapPlaceholderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#065F46',
-    marginTop: 12,
-    fontFamily: 'System',
-  },
-  mapSubText: {
-    fontSize: 14,
-    color: '#059669',
-    marginTop: 4,
-    fontFamily: 'System',
-  },
-  mapPreview: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
-  },
-  mapPreviewCard: {
-    marginBottom: 0,
   },
   listContainer: {
     flex: 1,
@@ -525,6 +411,24 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 100,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   activityCard: {
     backgroundColor: '#FFFFFF',
@@ -536,8 +440,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F0FDF4',
+  },
+  pastActivityCard: {
+    opacity: 0.7,
   },
   activityHeader: {
     flexDirection: 'row',
@@ -548,21 +453,14 @@ const styles = StyleSheet.create({
   categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  categoryEmoji: {
-    fontSize: 12,
-    marginRight: 4,
-  },
   categoryText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#065F46',
-    textTransform: 'capitalize',
-    fontFamily: 'System',
+    marginLeft: 4,
   },
   participantsInfo: {
     flexDirection: 'row',
@@ -573,24 +471,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#059669',
     marginLeft: 4,
-    fontFamily: 'System',
   },
   activityTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#065F46',
+    color: '#374151',
     marginBottom: 8,
-    fontFamily: 'System',
   },
   activityDescription: {
     fontSize: 14,
     color: '#6B7280',
     lineHeight: 20,
     marginBottom: 12,
-    fontFamily: 'System',
   },
   activityMeta: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   metaItem: {
     flexDirection: 'row',
@@ -601,7 +496,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     marginLeft: 6,
-    fontFamily: 'System',
+  },
+  statusContainer: {
+    marginBottom: 12,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#374151',
   },
   joinButton: {
     backgroundColor: '#10B981',
@@ -614,35 +522,13 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  joinButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
   joinButtonText: {
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: 'System',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#34D399',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#34D399',
   },
 });
 

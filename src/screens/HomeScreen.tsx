@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,128 +6,215 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StyleSheet,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { GoodDeed } from '../types';
-import FloatingActionButton from '../components/FloatingActionButton';
+import { DeedService } from '../lib/deedService';
+import { Activity } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 const HomeScreen: React.FC = () => {
-  const goodDeeds: GoodDeed[] = [
-    {
-      id: 1,
-      user: 'Sarah Chen',
-      avatar: '🌸',
-      image: '🌳',
-      description:
-        'Planted 5 trees in the local park with my neighborhood group today!',
-      likes: 24,
-      comments: 8,
-      timeAgo: '2 hours ago',
-    },
-    {
-      id: 2,
-      user: 'Marcus Johnson',
-      avatar: '🌟',
-      image: '🍲',
-      description:
-        'Cooked meals for the homeless shelter downtown. Nothing beats seeing smiles!',
-      likes: 31,
-      comments: 12,
-      timeAgo: '4 hours ago',
-    },
-    {
-      id: 3,
-      user: 'Elena Rodriguez',
-      avatar: '🌻',
-      image: '📚',
-      description:
-        "Donated 20 books to the local library's children's section.",
-      likes: 18,
-      comments: 5,
-      timeAgo: '6 hours ago',
-    },
-    {
-      id: 4,
-      user: 'David Kim',
-      avatar: '🌱',
-      image: '🐕',
-      description:
-        'Volunteered at the animal rescue center - these pups made my day!',
-      likes: 42,
-      comments: 15,
-      timeAgo: '8 hours ago',
-    },
-    {
-      id: 5,
-      user: 'Maya Patel',
-      avatar: '🌈',
-      image: '👵',
-      description:
-        'Spent the afternoon reading to elderly residents at the care home.',
-      likes: 27,
-      comments: 9,
-      timeAgo: '10 hours ago',
-    },
-  ];
+  const { user } = useAuth();
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [userStats, setUserStats] = useState({
+    karma_points: 0,
+    total_deeds: 0,
+  });
+
+  useEffect(() => {
+    loadActivityFeed();
+    if (user) {
+      loadUserStats();
+    }
+  }, [user]);
+
+  const loadActivityFeed = async () => {
+    try {
+      const feedData = await DeedService.getActivityFeed();
+      setActivities(feedData);
+    } catch (error) {
+      console.error('Failed to load activity feed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUserStats = async () => {
+    if (!user) return;
+    try {
+      const stats = await DeedService.getUserKarmaStats(user.id);
+      if (stats) {
+        setUserStats(stats);
+      }
+    } catch (error) {
+      console.error('Failed to load user stats:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([loadActivityFeed(), loadUserStats()]);
+    setRefreshing(false);
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60),
+    );
+
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+
+    return date.toLocaleDateString();
+  };
+
+  const getCategoryIcon = (categoryIcon: string | undefined) => {
+    const iconMap: { [key: string]: string } = {
+      eco: 'eco',
+      people: 'people',
+      school: 'school',
+      favorite: 'favorite',
+      pets: 'pets',
+      elderly: 'elderly-woman',
+      'volunteer-activism': 'volunteer-activism',
+      'auto-awesome': 'auto-awesome',
+    };
+    return iconMap[categoryIcon || ''] || 'star';
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#10B981" />
+          <Text style={styles.loadingText}>Loading your karma feed...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Motivational Header */}
+      {/* Header with User Stats */}
       <View style={styles.header}>
-        <Text style={styles.motivationalText}>
-          Every good deed grows the world 🌱
+        <Text style={styles.welcomeText}>
+          Welcome back, {user?.email?.split('@')[0] || 'Friend'}! 👋
         </Text>
-        <Text style={styles.subText}>Together, we're making a difference</Text>
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{userStats.karma_points}</Text>
+            <Text style={styles.statLabel}>Karma Points</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{userStats.total_deeds}</Text>
+            <Text style={styles.statLabel}>Good Deeds</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Good Deeds Feed */}
+      {/* Activity Feed */}
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
-        {goodDeeds.map(deed => (
-          <View key={deed.id} style={styles.deedCard}>
-            {/* User Info */}
-            <View style={styles.userInfo}>
-              <View style={styles.avatarContainer}>
-                <Text style={styles.avatar}>{deed.avatar}</Text>
-              </View>
-              <View style={styles.userDetails}>
-                <Text style={styles.userName}>{deed.user}</Text>
-                <Text style={styles.timeAgo}>{deed.timeAgo}</Text>
-              </View>
-            </View>
+        <Text style={styles.feedTitle}>Recent Good Deeds 🌟</Text>
 
-            {/* Deed Image */}
-            <View style={styles.deedImageContainer}>
-              <Text style={styles.deedImage}>{deed.image}</Text>
-            </View>
-
-            {/* Description */}
-            <Text style={styles.description}>{deed.description}</Text>
-
-            {/* Action Buttons */}
-            <View style={styles.actionBar}>
-              <TouchableOpacity style={styles.actionButton}>
-                <Icon name="favorite-border" size={18} color="#059669" />
-                <Text style={styles.actionText}>{deed.likes}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButton}>
-                <Icon name="chat-bubble-outline" size={18} color="#059669" />
-                <Text style={styles.actionText}>{deed.comments}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButton}>
-                <Icon name="share" size={18} color="#059669" />
-                <Text style={styles.actionText}>Share</Text>
-              </TouchableOpacity>
-            </View>
+        {activities.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Icon name="sentiment-satisfied" size={48} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>No activities yet!</Text>
+            <Text style={styles.emptyText}>
+              Be the first to log a good deed and inspire others!
+            </Text>
           </View>
-        ))}
-      </ScrollView>
+        ) : (
+          activities.map(activity => (
+            <View key={activity.id} style={styles.activityCard}>
+              {/* User Info */}
+              <View style={styles.userInfo}>
+                <View style={styles.avatarContainer}>
+                  <Icon
+                    name={getCategoryIcon(activity.category_icon)}
+                    size={20}
+                    color={activity.category_color || '#10B981'}
+                  />
+                </View>
+                <View style={styles.userDetails}>
+                  <Text style={styles.userName}>
+                    {activity.full_name || activity.username || 'Anonymous'}
+                  </Text>
+                  <Text style={styles.timeAgo}>
+                    {formatTimeAgo(activity.created_at)}
+                  </Text>
+                </View>
+                <View style={styles.karmaTag}>
+                  <Text style={styles.karmaText}>+{activity.karma_earned}</Text>
+                </View>
+              </View>
 
-      {/* Floating Action Button */}
-      <FloatingActionButton />
+              {/* Activity Details */}
+              <View style={styles.activityContent}>
+                <Text style={styles.activityTitle}>{activity.title}</Text>
+                {activity.description && (
+                  <Text style={styles.activityDescription}>
+                    {activity.description}
+                  </Text>
+                )}
+                {activity.category_name && (
+                  <View style={styles.categoryContainer}>
+                    <Icon
+                      name={getCategoryIcon(activity.category_icon)}
+                      size={14}
+                      color={activity.category_color || '#10B981'}
+                    />
+                    <Text
+                      style={[
+                        styles.categoryName,
+                        { color: activity.category_color || '#10B981' },
+                      ]}
+                    >
+                      {activity.category_name}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.actionBar}>
+                <TouchableOpacity style={styles.actionButton}>
+                  <Icon name="favorite-border" size={16} color="#059669" />
+                  <Text style={styles.actionText}>Inspire</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton}>
+                  <Icon name="share" size={16} color="#059669" />
+                  <Text style={styles.actionText}>Share</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
+
+        {/* Motivational Footer */}
+        <View style={styles.footerMotivation}>
+          <Text style={styles.motivationText}>
+            "No act of kindness, no matter how small, is ever wasted." ✨
+          </Text>
+          <Text style={styles.motivationAuthor}>- Aesop</Text>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -137,54 +224,95 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  header: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
-    backgroundColor: '#F0FDF4',
-    borderBottomWidth: 3,
-    borderBottomColor: '#FEF3E0',
   },
-  motivationalText: {
+  welcomeText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#065F46',
     textAlign: 'center',
-    marginBottom: 8,
-    fontFamily: 'System',
+    marginBottom: 16,
   },
-  subText: {
-    fontSize: 14,
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statItem: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#10B981',
+  },
+  statLabel: {
+    fontSize: 12,
     color: '#059669',
-    opacity: 0.8,
-    textAlign: 'center',
-    fontFamily: 'System',
+    marginTop: 4,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#D1FAE5',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 16,
     paddingBottom: 100,
   },
-  deedCard: {
+  feedTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 20,
+    marginBottom: 16,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  activityCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     marginBottom: 16,
     padding: 16,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F0FDF4',
   },
   userInfo: {
     flexDirection: 'row',
@@ -198,11 +326,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F0FDF4',
-    borderWidth: 2,
-    borderColor: '#FEF3E0',
-  },
-  avatar: {
-    fontSize: 18,
   },
   userDetails: {
     marginLeft: 12,
@@ -211,43 +334,54 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#065F46',
-    fontFamily: 'System',
+    color: '#374151',
   },
   timeAgo: {
     fontSize: 12,
-    color: '#059669',
-    opacity: 0.7,
+    color: '#6B7280',
     marginTop: 2,
-    fontFamily: 'System',
   },
-  deedImageContainer: {
-    width: '100%',
-    height: 120,
+  karmaTag: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  },
+  karmaText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#92400E',
+  },
+  activityContent: {
     marginBottom: 12,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 2,
-    borderColor: '#FEF3E0',
   },
-  deedImage: {
-    fontSize: 32,
-  },
-  description: {
-    fontSize: 14,
+  activityTitle: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#374151',
+    marginBottom: 4,
+  },
+  activityDescription: {
+    fontSize: 14,
+    color: '#6B7280',
     lineHeight: 20,
-    marginBottom: 12,
-    fontFamily: 'System',
+    marginBottom: 8,
+  },
+  categoryContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  categoryName: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 4,
   },
   actionBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 8,
+    justifyContent: 'space-around',
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F0FDF4',
+    borderTopColor: '#F3F4F6',
   },
   actionButton: {
     flexDirection: 'row',
@@ -259,7 +393,26 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#059669',
     marginLeft: 4,
-    fontFamily: 'System',
+  },
+  footerMotivation: {
+    backgroundColor: '#F0FDF4',
+    padding: 20,
+    borderRadius: 16,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  motivationText: {
+    fontSize: 16,
+    fontStyle: 'italic',
+    color: '#065F46',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  motivationAuthor: {
+    fontSize: 14,
+    color: '#059669',
+    marginTop: 8,
+    fontWeight: '500',
   },
 });
 

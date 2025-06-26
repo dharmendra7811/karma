@@ -19,12 +19,58 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // Database types for better TypeScript support
 export interface Profile {
   id: string;
-  email: string;
-  full_name: string;
+  username?: string;
+  full_name?: string;
   avatar_url?: string;
-  karma_score: number;
+  bio?: string;
+  karma_points: number;
+  total_deeds: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface DeedCategory {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  karma_multiplier: number;
+  created_at: string;
+}
+
+export interface Deed {
+  id: string;
+  user_id: string;
+  category_id: string;
+  title: string;
+  description?: string;
+  karma_points: number;
+  location?: string;
+  image_url?: string;
+  is_verified: boolean;
+  created_at: string;
+  updated_at: string;
+  category?: DeedCategory;
+  user_profile?: Profile;
+}
+
+export interface Activity {
+  id: string;
+  user_id: string;
+  deed_id?: string;
+  activity_type: 'deed_logged' | 'karma_milestone' | 'badge_earned';
+  title: string;
+  description?: string;
+  karma_earned: number;
+  created_at: string;
+  username?: string;
+  full_name?: string;
+  avatar_url?: string;
+  deed_title?: string;
+  category_name?: string;
+  category_icon?: string;
+  category_color?: string;
 }
 
 export interface AuthUser {
@@ -32,5 +78,5 @@ export interface AuthUser {
   email: string;
   full_name?: string;
   avatar_url?: string;
-  karma_score?: number;
+  karma_points?: number;
 }

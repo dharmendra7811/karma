@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,166 +8,279 @@ import {
   TextInput,
   ScrollView,
   Alert,
-  Switch,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-
-interface Category {
-  id: string;
-  label: string;
-  emoji: string;
-}
+import { DeedService } from '../lib/deedService';
+import { ActivityService } from '../lib/activityService';
+import { DeedCategory } from '../lib/supabase';
 
 const ActionScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'deed' | 'activity'>('deed');
-  const [deedDescription, setDeedDescription] = useState('');
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [categories, setCategories] = useState<DeedCategory[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+
+  // Deed form state
+  const [deedForm, setDeedForm] = useState({
+    title: '',
+    description: '',
+    location: '',
+    selectedCategory: '',
+  });
+  const [isSubmittingDeed, setIsSubmittingDeed] = useState(false);
 
   // Activity form state
-  const [activityTitle, setActivityTitle] = useState('');
-  const [activityDescription, setActivityDescription] = useState('');
-  const [activityDate, setActivityDate] = useState('');
-  const [activityTime, setActivityTime] = useState('');
-  const [activityLocation, setActivityLocation] = useState('');
-  const [maxParticipants, setMaxParticipants] = useState('');
+  const [activityForm, setActivityForm] = useState({
+    title: '',
+    description: '',
+    location: '',
+    date: '',
+    time: '',
+    maxParticipants: '',
+    selectedCategory: '',
+  });
+  const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
 
-  const categories: Category[] = [
-    { id: 'helping', label: 'Helping', emoji: '🤝' },
-    { id: 'environment', label: 'Environment', emoji: '🌱' },
-    { id: 'awareness', label: 'Awareness', emoji: '📢' },
-    { id: 'education', label: 'Education', emoji: '📚' },
-    { id: 'health', label: 'Health', emoji: '🏥' },
-    { id: 'community', label: 'Community', emoji: '🏘️' },
-  ];
+  useEffect(() => {
+    loadCategories();
+  }, []);
 
-  const toggleCategory = (categoryId: string) => {
-    if (selectedCategories.includes(categoryId)) {
-      setSelectedCategories(selectedCategories.filter(id => id !== categoryId));
-    } else {
-      setSelectedCategories([...selectedCategories, categoryId]);
+  const loadCategories = async () => {
+    try {
+      const categoriesData = await DeedService.getCategories();
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Failed to load categories:', error);
+      Alert.alert('Error', 'Failed to load deed categories');
+    } finally {
+      setLoadingCategories(false);
     }
   };
 
-  const handleSubmitDeed = () => {
-    if (!deedDescription.trim()) {
-      Alert.alert('Missing Information', 'Please describe your good deed.');
+  const resetDeedForm = () => {
+    setDeedForm({
+      title: '',
+      description: '',
+      location: '',
+      selectedCategory: '',
+    });
+  };
+
+  const resetActivityForm = () => {
+    setActivityForm({
+      title: '',
+      description: '',
+      location: '',
+      date: '',
+      time: '',
+      maxParticipants: '',
+      selectedCategory: '',
+    });
+  };
+
+  const handleSubmitDeed = async () => {
+    if (!deedForm.title.trim()) {
+      Alert.alert('Missing Information', 'Please enter a title for your deed.');
       return;
     }
 
-    Alert.alert(
-      'Good Deed Shared! 🌟',
-      'Thank you for making the world a better place!',
-      [
-        {
-          text: 'Continue Spreading Kindness',
-          onPress: () => {
-            setDeedDescription('');
-            setSelectedCategories([]);
-            setIsAnonymous(false);
-          },
-        },
-      ],
-    );
-  };
+    if (!deedForm.selectedCategory) {
+      Alert.alert('Missing Information', 'Please select a category.');
+      return;
+    }
 
-  const handleSubmitActivity = () => {
-    if (!activityTitle.trim() || !activityDescription.trim()) {
+    setIsSubmittingDeed(true);
+    try {
+      await DeedService.logDeed({
+        category_id: deedForm.selectedCategory,
+        title: deedForm.title.trim(),
+        description: deedForm.description.trim() || undefined,
+        location: deedForm.location.trim() || undefined,
+      });
+
       Alert.alert(
-        'Missing Information',
-        'Please fill in the title and description.',
+        'Good Deed Logged! 🌟',
+        'Thank you for making the world a better place! Your karma has been updated.',
+        [
+          {
+            text: 'Continue Spreading Kindness',
+            onPress: resetDeedForm,
+          },
+        ],
       );
+    } catch (error) {
+      console.error('Failed to log deed:', error);
+      Alert.alert('Error', 'Failed to log your deed. Please try again.');
+    } finally {
+      setIsSubmittingDeed(false);
+    }
+  };
+
+  const handleSubmitActivity = async () => {
+    if (!activityForm.title.trim()) {
+      Alert.alert('Missing Information', 'Please enter a title for your activity.');
       return;
     }
 
-    Alert.alert(
-      'Community Activity Created! 🎉',
-      'Your event has been posted for others to join!',
-      [
-        {
-          text: 'Great!',
-          onPress: () => {
-            setActivityTitle('');
-            setActivityDescription('');
-            setActivityDate('');
-            setActivityTime('');
-            setActivityLocation('');
-            setMaxParticipants('');
+    if (!activityForm.description.trim()) {
+      Alert.alert('Missing Information', 'Please enter a description for your activity.');
+      return;
+    }
+
+    if (!activityForm.date) {
+      Alert.alert('Missing Information', 'Please select a date for your activity.');
+      return;
+    }
+
+    if (!activityForm.time) {
+      Alert.alert('Missing Information', 'Please select a time for your activity.');
+      return;
+    }
+
+    setIsSubmittingActivity(true);
+    try {
+      await ActivityService.createActivity({
+        title: activityForm.title.trim(),
+        description: activityForm.description.trim(),
+        location: activityForm.location.trim() || undefined,
+        activity_date: activityForm.date,
+        activity_time: activityForm.time,
+        max_participants: activityForm.maxParticipants ? parseInt(activityForm.maxParticipants) : undefined,
+        category_id: activityForm.selectedCategory || undefined,
+      });
+
+      Alert.alert(
+        'Activity Created! 🎉',
+        'Your community activity has been posted! Others can now join and help make a difference together.',
+        [
+          {
+            text: 'Great!',
+            onPress: resetActivityForm,
           },
-        },
-      ],
-    );
+        ],
+      );
+    } catch (error) {
+      console.error('Failed to create activity:', error);
+      Alert.alert('Error', 'Failed to create your activity. Please try again.');
+    } finally {
+      setIsSubmittingActivity(false);
+    }
   };
+
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+
+  const getCurrentTime = () => {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const renderCategorySelection = (selectedCategory: string, onSelect: (id: string) => void) => (
+    <>
+      <Text style={styles.sectionLabel}>Choose a category: *</Text>
+      {loadingCategories ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#10B981" />
+          <Text style={styles.loadingText}>Loading categories...</Text>
+        </View>
+      ) : (
+        <View style={styles.categoriesContainer}>
+          {categories.map(category => (
+            <TouchableOpacity
+              key={category.id}
+              style={[
+                styles.categoryTag,
+                selectedCategory === category.id && styles.categoryTagSelected,
+              ]}
+              onPress={() => onSelect(category.id)}
+            >
+              <Icon 
+                name={category.icon || 'category'} 
+                size={16} 
+                color={selectedCategory === category.id ? '#FFFFFF' : (category.color || '#059669')}
+              />
+              <Text
+                style={[
+                  styles.categoryText,
+                  selectedCategory === category.id && styles.categoryTextSelected,
+                ]}
+              >
+                {category.name}
+              </Text>
+              {category.karma_multiplier > 1 && (
+                <Text style={[
+                  styles.multiplierText,
+                  selectedCategory === category.id && styles.multiplierTextSelected,
+                ]}>
+                  {category.karma_multiplier}x
+                </Text>
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </>
+  );
 
   const renderLogDeedTab = () => (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       <Text style={styles.tabTitle}>What good did you do today? ✨</Text>
 
-      {/* Description Input */}
       <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>Title *</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Give your deed a title..."
+          placeholderTextColor="#9CA3AF"
+          value={deedForm.title}
+          onChangeText={(text) => setDeedForm({...deedForm, title: text})}
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>Description</Text>
         <TextInput
           style={styles.textArea}
-          placeholder="Describe your good deed..."
+          placeholder="Tell us more about what you did..."
           placeholderTextColor="#9CA3AF"
-          value={deedDescription}
-          onChangeText={setDeedDescription}
+          value={deedForm.description}
+          onChangeText={(text) => setDeedForm({...deedForm, description: text})}
           multiline
           numberOfLines={4}
           textAlignVertical="top"
         />
       </View>
 
-      {/* Category Tags */}
-      <Text style={styles.sectionLabel}>Choose categories:</Text>
-      <View style={styles.categoriesContainer}>
-        {categories.map(category => (
-          <TouchableOpacity
-            key={category.id}
-            style={[
-              styles.categoryTag,
-              selectedCategories.includes(category.id) &&
-                styles.categoryTagSelected,
-            ]}
-            onPress={() => toggleCategory(category.id)}
-          >
-            <Text style={styles.categoryEmoji}>{category.emoji}</Text>
-            <Text
-              style={[
-                styles.categoryText,
-                selectedCategories.includes(category.id) &&
-                  styles.categoryTextSelected,
-              ]}
-            >
-              {category.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Upload Image/Video */}
-      <TouchableOpacity style={styles.uploadContainer}>
-        <Icon name="add-photo-alternate" size={24} color="#059669" />
-        <Text style={styles.uploadText}>Add photo or video</Text>
-        <Icon name="keyboard-arrow-right" size={20} color="#9CA3AF" />
-      </TouchableOpacity>
-
-      {/* Anonymous Toggle */}
-      <View style={styles.toggleContainer}>
-        <View style={styles.toggleLeft}>
-          <Icon name="visibility-off" size={20} color="#059669" />
-          <Text style={styles.toggleLabel}>Post anonymously</Text>
-        </View>
-        <Switch
-          value={isAnonymous}
-          onValueChange={setIsAnonymous}
-          trackColor={{ false: '#E5E7EB', true: '#86EFAC' }}
-          thumbColor={isAnonymous ? '#059669' : '#F3F4F6'}
+      <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>Location (Optional)</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Where did this happen?"
+          placeholderTextColor="#9CA3AF"
+          value={deedForm.location}
+          onChangeText={(text) => setDeedForm({...deedForm, location: text})}
         />
       </View>
 
-      {/* Submit Button */}
-      <TouchableOpacity style={styles.submitButton} onPress={handleSubmitDeed}>
-        <Text style={styles.submitButtonText}>Share Your Good Deed 🌱</Text>
+      {renderCategorySelection(
+        deedForm.selectedCategory, 
+        (id) => setDeedForm({...deedForm, selectedCategory: id})
+      )}
+
+      <TouchableOpacity 
+        style={[styles.submitButton, isSubmittingDeed && styles.submitButtonDisabled]} 
+        onPress={handleSubmitDeed}
+        disabled={isSubmittingDeed}
+      >
+        {isSubmittingDeed ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <Text style={styles.submitButtonText}>Log Your Good Deed 🌱</Text>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );
@@ -176,99 +289,128 @@ const ActionScreen: React.FC = () => {
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       <Text style={styles.tabTitle}>Plan a community event 🌍</Text>
 
-      {/* Title Input */}
       <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Event Title</Text>
+        <Text style={styles.inputLabel}>Event Title *</Text>
         <TextInput
           style={styles.textInput}
           placeholder="What's your event called?"
           placeholderTextColor="#9CA3AF"
-          value={activityTitle}
-          onChangeText={setActivityTitle}
+          value={activityForm.title}
+          onChangeText={(text) => setActivityForm({...activityForm, title: text})}
         />
       </View>
 
-      {/* Description Input */}
       <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Description</Text>
+        <Text style={styles.inputLabel}>Description *</Text>
         <TextInput
           style={styles.textArea}
-          placeholder="Tell people about your event..."
+          placeholder="Tell people about your event and what you'll do together..."
           placeholderTextColor="#9CA3AF"
-          value={activityDescription}
-          onChangeText={setActivityDescription}
+          value={activityForm.description}
+          onChangeText={(text) => setActivityForm({...activityForm, description: text})}
           multiline
           numberOfLines={3}
           textAlignVertical="top"
         />
       </View>
 
-      {/* Date and Time */}
       <View style={styles.rowContainer}>
         <View style={[styles.inputContainer, styles.halfWidth]}>
-          <Text style={styles.inputLabel}>Date</Text>
-          <TouchableOpacity style={styles.dateTimeInput}>
-            <Icon name="event" size={20} color="#059669" />
-            <TextInput
-              style={styles.dateTimeText}
-              placeholder="Select date"
-              placeholderTextColor="#9CA3AF"
-              value={activityDate}
-              onChangeText={setActivityDate}
-            />
-          </TouchableOpacity>
+          <Text style={styles.inputLabel}>Date *</Text>
+          <TextInput
+            style={styles.textInput}
+            placeholder={getTodayDate()}
+            placeholderTextColor="#9CA3AF"
+            value={activityForm.date}
+            onChangeText={(text) => setActivityForm({...activityForm, date: text})}
+          />
+          <Text style={styles.helpText}>Format: YYYY-MM-DD</Text>
         </View>
 
         <View style={[styles.inputContainer, styles.halfWidth]}>
-          <Text style={styles.inputLabel}>Time</Text>
-          <TouchableOpacity style={styles.dateTimeInput}>
-            <Icon name="access-time" size={20} color="#059669" />
-            <TextInput
-              style={styles.dateTimeText}
-              placeholder="Select time"
-              placeholderTextColor="#9CA3AF"
-              value={activityTime}
-              onChangeText={setActivityTime}
-            />
-          </TouchableOpacity>
+          <Text style={styles.inputLabel}>Time *</Text>
+          <TextInput
+            style={styles.textInput}
+            placeholder={getCurrentTime()}
+            placeholderTextColor="#9CA3AF"
+            value={activityForm.time}
+            onChangeText={(text) => setActivityForm({...activityForm, time: text})}
+          />
+          <Text style={styles.helpText}>Format: HH:MM (24h)</Text>
         </View>
       </View>
 
-      {/* Location Input */}
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>Location</Text>
-        <TouchableOpacity style={styles.locationInput}>
-          <Icon name="place" size={20} color="#059669" />
-          <TextInput
-            style={styles.locationText}
-            placeholder="Where will this happen?"
-            placeholderTextColor="#9CA3AF"
-            value={activityLocation}
-            onChangeText={setActivityLocation}
-          />
-          <Icon name="my-location" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Where will this happen?"
+          placeholderTextColor="#9CA3AF"
+          value={activityForm.location}
+          onChangeText={(text) => setActivityForm({...activityForm, location: text})}
+        />
       </View>
 
-      {/* Max Participants */}
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>Max Participants (Optional)</Text>
         <TextInput
           style={styles.textInput}
           placeholder="How many people can join?"
           placeholderTextColor="#9CA3AF"
-          value={maxParticipants}
-          onChangeText={setMaxParticipants}
+          value={activityForm.maxParticipants}
+          onChangeText={(text) => setActivityForm({...activityForm, maxParticipants: text})}
           keyboardType="numeric"
         />
       </View>
 
-      {/* Submit Button */}
+      <Text style={styles.sectionLabel}>Category (Optional):</Text>
+      {loadingCategories ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#10B981" />
+          <Text style={styles.loadingText}>Loading categories...</Text>
+        </View>
+      ) : (
+        <View style={styles.categoriesContainer}>
+          {categories.map(category => (
+            <TouchableOpacity
+              key={category.id}
+              style={[
+                styles.categoryTag,
+                activityForm.selectedCategory === category.id && styles.categoryTagSelected,
+              ]}
+              onPress={() => setActivityForm({
+                ...activityForm, 
+                selectedCategory: activityForm.selectedCategory === category.id ? '' : category.id
+              })}
+            >
+              <Icon 
+                name={category.icon || 'category'} 
+                size={16} 
+                color={activityForm.selectedCategory === category.id ? '#FFFFFF' : (category.color || '#059669')}
+              />
+              <Text
+                style={[
+                  styles.categoryText,
+                  activityForm.selectedCategory === category.id && styles.categoryTextSelected,
+                ]}
+              >
+                {category.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       <TouchableOpacity
-        style={styles.submitButton}
+        style={[styles.submitButton, isSubmittingActivity && styles.submitButtonDisabled]}
         onPress={handleSubmitActivity}
+        disabled={isSubmittingActivity}
       >
-        <Text style={styles.submitButtonText}>Create Community Event 🎉</Text>
+        {isSubmittingActivity ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <Text style={styles.submitButtonText}>Create Community Event 🎉</Text>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );
@@ -343,7 +485,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
-    fontFamily: 'System',
   },
   activeTabText: {
     color: '#065F46',
@@ -359,7 +500,6 @@ const styles = StyleSheet.create({
     color: '#065F46',
     marginBottom: 24,
     textAlign: 'center',
-    fontFamily: 'System',
   },
   inputContainer: {
     marginBottom: 20,
@@ -369,7 +509,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
-    fontFamily: 'System',
   },
   textInput: {
     backgroundColor: '#FFFFFF',
@@ -380,7 +519,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: '#374151',
-    fontFamily: 'System',
   },
   textArea: {
     backgroundColor: '#FFFFFF',
@@ -392,14 +530,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#374151',
     minHeight: 100,
-    fontFamily: 'System',
   },
   sectionLabel: {
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 12,
-    fontFamily: 'System',
+  },
+  helpText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  halfWidth: {
+    width: '48%',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  loadingText: {
+    marginLeft: 8,
+    color: '#6B7280',
   },
   categoriesContainer: {
     flexDirection: 'row',
@@ -419,102 +577,26 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   categoryTagSelected: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#059669',
-  },
-  categoryEmoji: {
-    fontSize: 14,
-    marginRight: 6,
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
   },
   categoryText: {
     fontSize: 14,
     color: '#6B7280',
-    fontFamily: 'System',
+    marginLeft: 6,
   },
   categoryTextSelected: {
-    color: '#065F46',
+    color: '#FFFFFF',
     fontWeight: '600',
   },
-  uploadContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginBottom: 20,
+  multiplierText: {
+    fontSize: 12,
+    color: '#F59E0B',
+    marginLeft: 4,
+    fontWeight: 'bold',
   },
-  uploadText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#059669',
-    marginLeft: 12,
-    fontFamily: 'System',
-  },
-  toggleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginBottom: 32,
-  },
-  toggleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  toggleLabel: {
-    fontSize: 16,
-    color: '#374151',
-    marginLeft: 8,
-    fontFamily: 'System',
-  },
-  rowContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  halfWidth: {
-    width: '48%',
-  },
-  dateTimeInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  dateTimeText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#374151',
-    marginLeft: 8,
-    fontFamily: 'System',
-  },
-  locationInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  locationText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#374151',
-    marginLeft: 8,
-    fontFamily: 'System',
+  multiplierTextSelected: {
+    color: '#FEF3C7',
   },
   submitButton: {
     backgroundColor: '#10B981',
@@ -528,26 +610,13 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  submitButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
   submitButtonText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: 'System',
-  },
-  quoteContainer: {
-    backgroundColor: '#FEF3E0',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  quote: {
-    fontSize: 14,
-    fontStyle: 'italic',
-    color: '#92400E',
-    fontFamily: 'System',
   },
 });
 
