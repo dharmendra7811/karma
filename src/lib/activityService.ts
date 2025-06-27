@@ -69,6 +69,8 @@ export class ActivityService {
             max_participants: activityData.max_participants,
             category_id: activityData.category_id,
             image_url: activityData.image_url,
+            latitude: activityData.latitude,
+            longitude: activityData.longitude,
           }
         ])
         .select('*')

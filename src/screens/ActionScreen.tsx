@@ -9,16 +9,25 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { DeedService } from '../lib/deedService';
 import { ActivityService } from '../lib/activityService';
 import { DeedCategory } from '../lib/supabase';
+import LocationService, { LocationCoordinates } from '../lib/locationService';
+import LocationPicker from '../components/LocationPicker';
 
 const ActionScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'deed' | 'activity'>('deed');
   const [categories, setCategories] = useState<DeedCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
+
+  // Location state
+  const [currentLocation, setCurrentLocation] =
+    useState<LocationCoordinates | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [isWatchingLocation, setIsWatchingLocation] = useState(false);
 
   // Deed form state
   const [deedForm, setDeedForm] = useState({
@@ -26,6 +35,8 @@ const ActionScreen: React.FC = () => {
     description: '',
     location: '',
     selectedCategory: '',
+    longitude: null as string | null,
+    latitude: null as string | null,
   });
   const [isSubmittingDeed, setIsSubmittingDeed] = useState(false);
 
@@ -38,11 +49,23 @@ const ActionScreen: React.FC = () => {
     time: '',
     maxParticipants: '',
     selectedCategory: '',
+    longitude: null as string | null,
+    latitude: null as string | null,
   });
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
 
+  // Location picker state
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [locationPickerType, setLocationPickerType] = useState<
+    'deed' | 'activity'
+  >('deed');
+
   useEffect(() => {
     loadCategories();
+    return () => {
+      // Clean up location watching when component unmounts
+      LocationService.stopWatchingLocation();
+    };
   }, []);
 
   const loadCategories = async () => {
@@ -57,12 +80,130 @@ const ActionScreen: React.FC = () => {
     }
   };
 
+  // Location functions
+  const getCurrentLocation = async () => {
+    setLocationLoading(true);
+    try {
+      const location = await LocationService.getCurrentLocation();
+      if (location) {
+        setCurrentLocation(location);
+        return location;
+      }
+    } catch (error) {
+      console.error('Error getting current location:', error);
+    } finally {
+      setLocationLoading(false);
+    }
+    return null;
+  };
+
+  const startLocationWatching = async () => {
+    if (isWatchingLocation) {
+      LocationService.stopWatchingLocation();
+      setIsWatchingLocation(false);
+      return;
+    }
+
+    const success = await LocationService.watchLocation(
+      location => {
+        setCurrentLocation(location);
+      },
+      error => {
+        console.error('Location watch error:', error);
+        setIsWatchingLocation(false);
+      },
+    );
+
+    setIsWatchingLocation(success);
+  };
+
+  const fillLocationFromCurrent = async (formType: 'deed' | 'activity') => {
+    setLocationLoading(true);
+    try {
+      const location = await LocationService.getCurrentLocation();
+      if (location) {
+        const address = await LocationService.reverseGeocode(
+          location.latitude,
+          location.longitude,
+        );
+
+        const formattedLocation =
+          address?.formattedAddress ||
+          LocationService.formatCoordinates(
+            location.latitude,
+            location.longitude,
+          );
+
+        if (formType === 'deed') {
+          setDeedForm({
+            ...deedForm,
+            location: formattedLocation,
+            longitude: location.longitude,
+            latitude: location.latitude,
+          });
+        } else {
+          setActivityForm({
+            ...activityForm,
+            location: formattedLocation,
+            longitude: location.longitude,
+            latitude: location.latitude,
+          });
+        }
+
+        Alert.alert(
+          'Location Added! 📍',
+          `Your current location has been added to the ${formType}.`,
+        );
+      }
+    } catch (error) {
+      console.error('Error filling location:', error);
+      Alert.alert('Error', 'Unable to get your location. Please try again.');
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  const openLocationPicker = (formType: 'deed' | 'activity') => {
+    setLocationPickerType(formType);
+    setShowLocationPicker(true);
+  };
+
+  const handleLocationSelect = (
+    location: string,
+    coordinates: LocationCoordinates,
+  ) => {
+    console.log(`Location selected: ${location}`, coordinates);
+
+    if (locationPickerType === 'deed') {
+      setDeedForm({
+        ...deedForm,
+        location: location,
+        longitude: coordinates.longitude,
+        latitude: coordinates.latitude,
+      });
+    } else {
+      setActivityForm({
+        ...activityForm,
+        location: location,
+        longitude: coordinates.longitude,
+        latitude: coordinates.latitude,
+      });
+    }
+
+    Alert.alert(
+      'Location Selected! 📍',
+      `Location has been added to your ${locationPickerType}.`,
+    );
+  };
+
   const resetDeedForm = () => {
     setDeedForm({
       title: '',
       description: '',
       location: '',
       selectedCategory: '',
+      longitude: null,
+      latitude: null,
     });
   };
 
@@ -75,6 +216,8 @@ const ActionScreen: React.FC = () => {
       time: '',
       maxParticipants: '',
       selectedCategory: '',
+      longitude: null,
+      latitude: null,
     });
   };
 
@@ -96,6 +239,8 @@ const ActionScreen: React.FC = () => {
         title: deedForm.title.trim(),
         description: deedForm.description.trim() || undefined,
         location: deedForm.location.trim() || undefined,
+        latitude: deedForm.latitude,
+        longitude: deedForm.longitude,
       });
 
       Alert.alert(
@@ -118,26 +263,40 @@ const ActionScreen: React.FC = () => {
 
   const handleSubmitActivity = async () => {
     if (!activityForm.title.trim()) {
-      Alert.alert('Missing Information', 'Please enter a title for your activity.');
+      Alert.alert(
+        'Missing Information',
+        'Please enter a title for your activity.',
+      );
       return;
     }
 
     if (!activityForm.description.trim()) {
-      Alert.alert('Missing Information', 'Please enter a description for your activity.');
+      Alert.alert(
+        'Missing Information',
+        'Please enter a description for your activity.',
+      );
       return;
     }
 
     if (!activityForm.date) {
-      Alert.alert('Missing Information', 'Please select a date for your activity.');
+      Alert.alert(
+        'Missing Information',
+        'Please select a date for your activity.',
+      );
       return;
     }
 
     if (!activityForm.time) {
-      Alert.alert('Missing Information', 'Please select a time for your activity.');
+      Alert.alert(
+        'Missing Information',
+        'Please select a time for your activity.',
+      );
       return;
     }
 
     setIsSubmittingActivity(true);
+    console.log('activityForm', activityForm);
+
     try {
       await ActivityService.createActivity({
         title: activityForm.title.trim(),
@@ -145,8 +304,12 @@ const ActionScreen: React.FC = () => {
         location: activityForm.location.trim() || undefined,
         activity_date: activityForm.date,
         activity_time: activityForm.time,
-        max_participants: activityForm.maxParticipants ? parseInt(activityForm.maxParticipants) : undefined,
+        max_participants: activityForm.maxParticipants
+          ? parseInt(activityForm.maxParticipants)
+          : undefined,
         category_id: activityForm.selectedCategory || undefined,
+        latitude: activityForm.latitude,
+        longitude: activityForm.longitude,
       });
 
       Alert.alert(
@@ -179,7 +342,71 @@ const ActionScreen: React.FC = () => {
     return `${hours}:${minutes}`;
   };
 
-  const renderCategorySelection = (selectedCategory: string, onSelect: (id: string) => void) => (
+  const renderLocationInfo = () => {
+    if (!currentLocation) return null;
+
+    return (
+      <View style={styles.locationInfoContainer}>
+        <View style={styles.locationHeader}>
+          <Icon name="my-location" size={16} color="#059669" />
+          <Text style={styles.locationInfoTitle}>Your Current Location</Text>
+          <TouchableOpacity
+            style={styles.locationWatchButton}
+            onPress={startLocationWatching}
+          >
+            <Icon
+              name={isWatchingLocation ? 'gps-fixed' : 'gps-not-fixed'}
+              size={16}
+              color={isWatchingLocation ? '#059669' : '#6B7280'}
+            />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.locationCoords}>
+          {LocationService.formatCoordinates(
+            currentLocation.latitude,
+            currentLocation.longitude,
+          )}
+        </Text>
+        {currentLocation.accuracy && (
+          <Text style={styles.locationAccuracy}>
+            Accuracy: ±{Math.round(currentLocation.accuracy)}m
+          </Text>
+        )}
+      </View>
+    );
+  };
+
+  const renderLocationButtons = (formType: 'deed' | 'activity') => (
+    <View style={styles.locationButtonsContainer}>
+      <TouchableOpacity
+        style={[styles.locationButton, styles.locationButtonHalf]}
+        onPress={() => fillLocationFromCurrent(formType)}
+        disabled={locationLoading}
+      >
+        {locationLoading ? (
+          <ActivityIndicator size="small" color="#059669" />
+        ) : (
+          <Icon name="my-location" size={16} color="#059669" />
+        )}
+        <Text style={styles.locationButtonText}>
+          {locationLoading ? 'Getting...' : 'Current'}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.locationButton, styles.locationButtonHalf]}
+        onPress={() => openLocationPicker(formType)}
+      >
+        <Icon name="search" size={16} color="#059669" />
+        <Text style={styles.locationButtonText}>Search Places</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderCategorySelection = (
+    selectedCategory: string,
+    onSelect: (id: string) => void,
+  ) => (
     <>
       <Text style={styles.sectionLabel}>Choose a category: *</Text>
       {loadingCategories ? (
@@ -198,24 +425,32 @@ const ActionScreen: React.FC = () => {
               ]}
               onPress={() => onSelect(category.id)}
             >
-              <Icon 
-                name={category.icon || 'category'} 
-                size={16} 
-                color={selectedCategory === category.id ? '#FFFFFF' : (category.color || '#059669')}
+              <Icon
+                name={category.icon || 'category'}
+                size={16}
+                color={
+                  selectedCategory === category.id
+                    ? '#FFFFFF'
+                    : category.color || '#059669'
+                }
               />
               <Text
                 style={[
                   styles.categoryText,
-                  selectedCategory === category.id && styles.categoryTextSelected,
+                  selectedCategory === category.id &&
+                    styles.categoryTextSelected,
                 ]}
               >
                 {category.name}
               </Text>
               {category.karma_multiplier > 1 && (
-                <Text style={[
-                  styles.multiplierText,
-                  selectedCategory === category.id && styles.multiplierTextSelected,
-                ]}>
+                <Text
+                  style={[
+                    styles.multiplierText,
+                    selectedCategory === category.id &&
+                      styles.multiplierTextSelected,
+                  ]}
+                >
                   {category.karma_multiplier}x
                 </Text>
               )}
@@ -237,7 +472,7 @@ const ActionScreen: React.FC = () => {
           placeholder="Give your deed a title..."
           placeholderTextColor="#9CA3AF"
           value={deedForm.title}
-          onChangeText={(text) => setDeedForm({...deedForm, title: text})}
+          onChangeText={text => setDeedForm({ ...deedForm, title: text })}
         />
       </View>
 
@@ -248,7 +483,7 @@ const ActionScreen: React.FC = () => {
           placeholder="Tell us more about what you did..."
           placeholderTextColor="#9CA3AF"
           value={deedForm.description}
-          onChangeText={(text) => setDeedForm({...deedForm, description: text})}
+          onChangeText={text => setDeedForm({ ...deedForm, description: text })}
           multiline
           numberOfLines={4}
           textAlignVertical="top"
@@ -262,17 +497,31 @@ const ActionScreen: React.FC = () => {
           placeholder="Where did this happen?"
           placeholderTextColor="#9CA3AF"
           value={deedForm.location}
-          onChangeText={(text) => setDeedForm({...deedForm, location: text})}
+          onChangeText={text => setDeedForm({ ...deedForm, location: text })}
         />
+        {renderLocationButtons('deed')}
+        {deedForm.longitude && deedForm.latitude && (
+          <View style={styles.coordinateInfo}>
+            <Icon name="place" size={14} color="#059669" />
+            <Text style={styles.coordinateText}>
+              {LocationService.formatCoordinates(
+                deedForm.latitude,
+                deedForm.longitude,
+              )}
+            </Text>
+          </View>
+        )}
       </View>
 
-      {renderCategorySelection(
-        deedForm.selectedCategory, 
-        (id) => setDeedForm({...deedForm, selectedCategory: id})
+      {renderCategorySelection(deedForm.selectedCategory, id =>
+        setDeedForm({ ...deedForm, selectedCategory: id }),
       )}
 
-      <TouchableOpacity 
-        style={[styles.submitButton, isSubmittingDeed && styles.submitButtonDisabled]} 
+      <TouchableOpacity
+        style={[
+          styles.submitButton,
+          isSubmittingDeed && styles.submitButtonDisabled,
+        ]}
         onPress={handleSubmitDeed}
         disabled={isSubmittingDeed}
       >
@@ -296,7 +545,9 @@ const ActionScreen: React.FC = () => {
           placeholder="What's your event called?"
           placeholderTextColor="#9CA3AF"
           value={activityForm.title}
-          onChangeText={(text) => setActivityForm({...activityForm, title: text})}
+          onChangeText={text =>
+            setActivityForm({ ...activityForm, title: text })
+          }
         />
       </View>
 
@@ -307,7 +558,9 @@ const ActionScreen: React.FC = () => {
           placeholder="Tell people about your event and what you'll do together..."
           placeholderTextColor="#9CA3AF"
           value={activityForm.description}
-          onChangeText={(text) => setActivityForm({...activityForm, description: text})}
+          onChangeText={text =>
+            setActivityForm({ ...activityForm, description: text })
+          }
           multiline
           numberOfLines={3}
           textAlignVertical="top"
@@ -322,7 +575,9 @@ const ActionScreen: React.FC = () => {
             placeholder={getTodayDate()}
             placeholderTextColor="#9CA3AF"
             value={activityForm.date}
-            onChangeText={(text) => setActivityForm({...activityForm, date: text})}
+            onChangeText={text =>
+              setActivityForm({ ...activityForm, date: text })
+            }
           />
           <Text style={styles.helpText}>Format: YYYY-MM-DD</Text>
         </View>
@@ -334,7 +589,9 @@ const ActionScreen: React.FC = () => {
             placeholder={getCurrentTime()}
             placeholderTextColor="#9CA3AF"
             value={activityForm.time}
-            onChangeText={(text) => setActivityForm({...activityForm, time: text})}
+            onChangeText={text =>
+              setActivityForm({ ...activityForm, time: text })
+            }
           />
           <Text style={styles.helpText}>Format: HH:MM (24h)</Text>
         </View>
@@ -347,8 +604,22 @@ const ActionScreen: React.FC = () => {
           placeholder="Where will this happen?"
           placeholderTextColor="#9CA3AF"
           value={activityForm.location}
-          onChangeText={(text) => setActivityForm({...activityForm, location: text})}
+          onChangeText={text =>
+            setActivityForm({ ...activityForm, location: text })
+          }
         />
+        {renderLocationButtons('activity')}
+        {activityForm.longitude && activityForm.latitude && (
+          <View style={styles.coordinateInfo}>
+            <Icon name="place" size={14} color="#059669" />
+            <Text style={styles.coordinateText}>
+              {LocationService.formatCoordinates(
+                activityForm.latitude,
+                activityForm.longitude,
+              )}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.inputContainer}>
@@ -358,7 +629,9 @@ const ActionScreen: React.FC = () => {
           placeholder="How many people can join?"
           placeholderTextColor="#9CA3AF"
           value={activityForm.maxParticipants}
-          onChangeText={(text) => setActivityForm({...activityForm, maxParticipants: text})}
+          onChangeText={text =>
+            setActivityForm({ ...activityForm, maxParticipants: text })
+          }
           keyboardType="numeric"
         />
       </View>
@@ -376,22 +649,33 @@ const ActionScreen: React.FC = () => {
               key={category.id}
               style={[
                 styles.categoryTag,
-                activityForm.selectedCategory === category.id && styles.categoryTagSelected,
+                activityForm.selectedCategory === category.id &&
+                  styles.categoryTagSelected,
               ]}
-              onPress={() => setActivityForm({
-                ...activityForm, 
-                selectedCategory: activityForm.selectedCategory === category.id ? '' : category.id
-              })}
+              onPress={() =>
+                setActivityForm({
+                  ...activityForm,
+                  selectedCategory:
+                    activityForm.selectedCategory === category.id
+                      ? ''
+                      : category.id,
+                })
+              }
             >
-              <Icon 
-                name={category.icon || 'category'} 
-                size={16} 
-                color={activityForm.selectedCategory === category.id ? '#FFFFFF' : (category.color || '#059669')}
+              <Icon
+                name={category.icon || 'category'}
+                size={16}
+                color={
+                  activityForm.selectedCategory === category.id
+                    ? '#FFFFFF'
+                    : category.color || '#059669'
+                }
               />
               <Text
                 style={[
                   styles.categoryText,
-                  activityForm.selectedCategory === category.id && styles.categoryTextSelected,
+                  activityForm.selectedCategory === category.id &&
+                    styles.categoryTextSelected,
                 ]}
               >
                 {category.name}
@@ -402,7 +686,10 @@ const ActionScreen: React.FC = () => {
       )}
 
       <TouchableOpacity
-        style={[styles.submitButton, isSubmittingActivity && styles.submitButtonDisabled]}
+        style={[
+          styles.submitButton,
+          isSubmittingActivity && styles.submitButtonDisabled,
+        ]}
         onPress={handleSubmitActivity}
         disabled={isSubmittingActivity}
       >
@@ -417,6 +704,30 @@ const ActionScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Location Info Header */}
+      {/* <View style={styles.locationSection}>
+        {currentLocation ? (
+          renderLocationInfo()
+        ) : (
+          <TouchableOpacity
+            style={styles.getLocationButton}
+            onPress={getCurrentLocation}
+            disabled={locationLoading}
+          >
+            {locationLoading ? (
+              <ActivityIndicator size="small" color="#059669" />
+            ) : (
+              <Icon name="location-searching" size={20} color="#059669" />
+            )}
+            <Text style={styles.getLocationButtonText}>
+              {locationLoading
+                ? 'Getting your location...'
+                : 'Get Current Location'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View> */}
+
       {/* Tab Header */}
       <View style={styles.tabHeader}>
         <TouchableOpacity
@@ -449,6 +760,19 @@ const ActionScreen: React.FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'deed' ? renderLogDeedTab() : renderCreateActivityTab()}
+
+      {/* Location Picker Modal */}
+      <Modal
+        visible={showLocationPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <LocationPicker
+          onLocationSelect={handleLocationSelect}
+          onClose={() => setShowLocationPicker(false)}
+          currentLocation={currentLocation}
+        />
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -617,6 +941,101 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  locationSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F0FDF4',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  locationInfoContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  locationInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#059669',
+    flex: 1,
+    marginLeft: 6,
+  },
+  locationWatchButton: {
+    padding: 4,
+  },
+  locationCoords: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'monospace',
+  },
+  locationAccuracy: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  getLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    borderStyle: 'dashed',
+  },
+  getLocationButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#059669',
+    marginLeft: 8,
+  },
+  locationButtonsContainer: {
+    flexDirection: 'row',
+    marginTop: 8,
+    gap: 8,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  locationButtonHalf: {
+    flex: 1,
+  },
+  locationButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#059669',
+    marginLeft: 6,
+  },
+  coordinateInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 6,
+  },
+  coordinateText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginLeft: 4,
+    fontFamily: 'monospace',
   },
 });
 
