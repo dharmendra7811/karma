@@ -131,11 +131,12 @@ const KarmaMapView: React.FC<KarmaMapViewProps> = ({ activities = [] }) => {
             
             const map = L.map('map').setView(defaultCenter, 12);
             
-            // Add FREE OpenStreetMap tiles
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
-            }).addTo(map);
+            // Add satellite imagery from Esri
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+}).addTo(map);
+
             
             // Auto-fit map to activities if available
             if (activities.length > 0) {
