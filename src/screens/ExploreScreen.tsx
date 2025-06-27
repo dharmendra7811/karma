@@ -40,6 +40,8 @@ const ExploreScreen: React.FC = () => {
     loadData();
   }, [selectedFilters]);
 
+  console.log('Selected Filters:', selectedFilters);
+
   const loadData = async () => {
     try {
       const [activitiesData, categoriesData] = await Promise.all([

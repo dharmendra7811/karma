@@ -95,8 +95,8 @@ export class ActivityService {
         .from('community_activities')
         .select(`
           *,
-          creator:user_profiles!community_activities_creator_id_fkey(username, full_name, avatar_url),
-          category:deed_categories(name, icon, color)
+            creator:user_profiles!community_activities_creator_id_fkey1(username, full_name),
+          category:deed_categories!community_activities_category_id_fkey(name, icon, color)
         `)
         .order('activity_date', { ascending: true })
         .order('activity_time', { ascending: true });
@@ -115,6 +115,9 @@ export class ActivityService {
       }
 
       const { data, error } = await query;
+
+      console.log(data);
+      
 
       if (error) {
         console.warn('Error with full query, trying simpler version:', error);
