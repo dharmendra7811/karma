@@ -12,13 +12,17 @@ import {
   Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { useAuth } from '../contexts/AuthContext';
 import { DeedService } from '../lib/deedService';
 import { ActivityService } from '../lib/activityService';
 import { DeedCategory } from '../lib/supabase';
 import LocationService, { LocationCoordinates } from '../lib/locationService';
 import LocationPicker from '../components/LocationPicker';
+import RealImagePicker from '../components/RealImagePicker';
+import { ImageUploadService } from '../services/ImageUploadService';
 
 const ActionScreen: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'deed' | 'activity'>('deed');
   const [categories, setCategories] = useState<DeedCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
@@ -53,6 +57,29 @@ const ActionScreen: React.FC = () => {
     latitude: null as string | null,
   });
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
+
+  // Image states
+  const [deedImages, setDeedImages] = useState<
+    Array<{
+      uri: string;
+      width?: number;
+      height?: number;
+      size?: number;
+      type?: string;
+      fileName?: string;
+    }>
+  >([]);
+  const [activityImages, setActivityImages] = useState<
+    Array<{
+      uri: string;
+      width?: number;
+      height?: number;
+      size?: number;
+      type?: string;
+      fileName?: string;
+    }>
+  >([]);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
 
   // Location picker state
   const [showLocationPicker, setShowLocationPicker] = useState(false);
@@ -205,6 +232,7 @@ const ActionScreen: React.FC = () => {
       longitude: null,
       latitude: null,
     });
+    setDeedImages([]);
   };
 
   const resetActivityForm = () => {
@@ -219,6 +247,7 @@ const ActionScreen: React.FC = () => {
       longitude: null,
       latitude: null,
     });
+    setActivityImages([]);
   };
 
   const handleSubmitDeed = async () => {
@@ -233,7 +262,46 @@ const ActionScreen: React.FC = () => {
     }
 
     setIsSubmittingDeed(true);
+    let imageUrls: string[] = [];
+
     try {
+      // Upload images if any
+      if (deedImages.length > 0) {
+        setIsUploadingImages(true);
+        const uploadResult = await ImageUploadService.uploadMultipleImages(
+          deedImages,
+          'deed',
+          user?.id,
+          progress => {
+            console.log(`Upload progress: ${Math.round(progress * 100)}%`);
+          },
+        );
+
+        if (uploadResult.success) {
+          imageUrls = uploadResult.urls;
+        } else {
+          // Show upload errors but still allow deed submission
+          Alert.alert(
+            'Image Upload Issues',
+            `Some images failed to upload: ${uploadResult.errors.join(
+              ', ',
+            )}. Continue anyway?`,
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+                onPress: () => {
+                  setIsSubmittingDeed(false);
+                  return;
+                },
+              },
+              { text: 'Continue', onPress: () => {} },
+            ],
+          );
+        }
+        setIsUploadingImages(false);
+      }
+
       await DeedService.logDeed({
         category_id: deedForm.selectedCategory,
         title: deedForm.title.trim(),
@@ -241,11 +309,14 @@ const ActionScreen: React.FC = () => {
         location: deedForm.location.trim() || undefined,
         latitude: deedForm.latitude,
         longitude: deedForm.longitude,
+        image_urls: imageUrls.length > 0 ? imageUrls : undefined,
       });
 
       Alert.alert(
         'Good Deed Logged! 🌟',
-        'Thank you for making the world a better place! Your karma has been updated.',
+        `Thank you for making the world a better place! Your karma has been updated.${
+          imageUrls.length > 0 ? ` ${imageUrls.length} photo(s) attached.` : ''
+        }`,
         [
           {
             text: 'Continue Spreading Kindness',
@@ -258,6 +329,7 @@ const ActionScreen: React.FC = () => {
       Alert.alert('Error', 'Failed to log your deed. Please try again.');
     } finally {
       setIsSubmittingDeed(false);
+      setIsUploadingImages(false);
     }
   };
 
@@ -308,8 +380,8 @@ const ActionScreen: React.FC = () => {
           ? parseInt(activityForm.maxParticipants)
           : undefined,
         category_id: activityForm.selectedCategory || undefined,
-        latitude: activityForm.latitude,
-        longitude: activityForm.longitude,
+        latitude: activityForm.latitude as string,
+        longitude: activityForm.longitude as string,
       });
 
       Alert.alert(
@@ -517,6 +589,24 @@ const ActionScreen: React.FC = () => {
         setDeedForm({ ...deedForm, selectedCategory: id }),
       )}
 
+      <RealImagePicker
+        images={deedImages}
+        onImagesChange={setDeedImages}
+        maxImages={3}
+        title="Add Photos (Optional)"
+        allowMultiple={true}
+        quality={0.7}
+        maxWidth={800}
+        maxHeight={600}
+      />
+
+      {isUploadingImages && (
+        <View style={styles.uploadingContainer}>
+          <ActivityIndicator size="small" color="#059669" />
+          <Text style={styles.uploadingText}>Uploading images...</Text>
+        </View>
+      )}
+
       <TouchableOpacity
         style={[
           styles.submitButton,
@@ -682,6 +772,24 @@ const ActionScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
           ))}
+        </View>
+      )}
+
+      <RealImagePicker
+        images={activityImages}
+        onImagesChange={setActivityImages}
+        maxImages={5}
+        title="Event Photos (Optional)"
+        allowMultiple={true}
+        quality={0.7}
+        maxWidth={800}
+        maxHeight={600}
+      />
+
+      {isUploadingImages && (
+        <View style={styles.uploadingContainer}>
+          <ActivityIndicator size="small" color="#059669" />
+          <Text style={styles.uploadingText}>Uploading images...</Text>
         </View>
       )}
 
@@ -1036,6 +1144,21 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginLeft: 4,
     fontFamily: 'monospace',
+  },
+  uploadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  uploadingText: {
+    fontSize: 14,
+    color: '#059669',
+    marginLeft: 8,
+    fontFamily: 'System',
   },
 });
 

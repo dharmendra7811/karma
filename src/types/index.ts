@@ -42,6 +42,29 @@ export interface Achievement {
   icon: string;
   unlockedAt?: string;
   isUnlocked: boolean;
+  requiredCount?: number;
+  currentCount?: number;
+  category?: string;
+  earned?: boolean;
+  earnedDate?: string;
+}
+
+export interface ImpactItem {
+  id: string;
+  type: 'deed' | 'event';
+  title: string;
+  description: string;
+  date: string;
+  points: number;
+  icon: string;
+  category?: string;
+}
+
+export interface KarmaLevel {
+  name: string;
+  emoji: string;
+  minPoints: number;
+  maxPoints: number;
 }
 
 export type TabParamList = {

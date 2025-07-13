@@ -9,9 +9,17 @@ import {
   Switch,
   Alert,
   Dimensions,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import AvatarPicker from '../components/AvatarPicker';
+import { ImageUploadService } from '../services/ImageUploadService';
+import { SupabaseDebugService } from '../services/SupabaseDebugService';
 import { useAuth } from '../contexts/AuthContext';
+import { useProfile } from '../contexts/ProfileContext';
+import { useImpact } from '../contexts/ImpactContext';
+import { ProfileService } from '../lib/profileService';
 
 const { width } = Dimensions.get('window');
 
@@ -23,69 +31,78 @@ interface QuickStat {
   color: string;
 }
 
-interface KarmaLevel {
-  name: string;
-  emoji: string;
-  minPoints: number;
-  maxPoints: number;
-}
-
 const ProfileScreen: React.FC = () => {
   const { user, signOut } = useAuth();
-  const [isProfilePrivate, setIsProfilePrivate] = useState(false);
-  const [notifications, setNotifications] = useState(true);
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
+  const {
+    profile,
+    stats,
+    recentActivity,
+    loading,
+    errors,
+    refreshAll,
+    updateProfile,
+    updatePrivacySettings,
+  } = useProfile();
+  const { currentLevel, nextLevel, progressPercentage, pointsToNext } =
+    useImpact();
 
-  // User data (in a real app, this would come from state management or API)
+  const [refreshing, setRefreshing] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  console.log(isUploadingAvatar, 'isUploadingAvatar state');
+
+  // Local state for settings
+  const [isProfilePrivate, setIsProfilePrivate] = useState(
+    profile?.is_profile_private || false,
+  );
+  const [notifications, setNotifications] = useState(
+    profile?.notifications_enabled !== false,
+  );
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(
+    profile?.theme_preference || 'system',
+  );
+
+  // Update local state when profile loads
+  React.useEffect(() => {
+    if (profile) {
+      setIsProfilePrivate(profile.is_profile_private || false);
+      setNotifications(profile.notifications_enabled !== false);
+      setTheme(profile.theme_preference || 'system');
+    }
+  }, [profile]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshAll();
+    } catch (error) {
+      console.error('Error refreshing profile data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Dynamic user data
   const userData = {
-    name: user?.full_name || 'Karma User',
+    name: profile?.full_name || user?.full_name || 'Karma User',
     email: user?.email || 'user@example.com',
-    avatar: '🌸',
-    status: 'Doing good, one deed at a time 🌱',
-    karmaScore: user?.karma_score || 0,
-    location: 'Vadodara, Gujarat',
-    bio: 'Environmental advocate and community volunteer. Love organizing cleanup drives!',
-    memberSince: 'May 2025',
+    avatar: profile?.avatar_emoji || '🌸',
+    avatarUrl: profile?.avatar_url,
+    status: profile?.status || 'Doing good, one deed at a time 🌱',
+    karmaScore: stats.karmaPoints,
+    location: profile?.location || 'Vadodara, Gujarat',
+    bio:
+      profile?.bio ||
+      'Environmental advocate and community volunteer. Love organizing cleanup drives!',
+    memberSince: profile?.created_at
+      ? new Date(profile.created_at).toLocaleDateString('en-US', {
+          month: 'long',
+          year: 'numeric',
+        })
+      : 'Recently',
   };
 
-  const karmaLevels: KarmaLevel[] = [
-    { name: 'Seedling', emoji: '🌱', minPoints: 0, maxPoints: 99 },
-    { name: 'Sprout', emoji: '🌿', minPoints: 100, maxPoints: 299 },
-    { name: 'Lotus', emoji: '🪷', minPoints: 300, maxPoints: 599 },
-    { name: 'Tree', emoji: '🌳', minPoints: 600, maxPoints: 999 },
-    { name: 'Forest', emoji: '🌲', minPoints: 1000, maxPoints: 9999 },
-  ];
-
-  const getCurrentLevel = () => {
-    return (
-      karmaLevels.find(
-        level =>
-          userData.karmaScore >= level.minPoints &&
-          userData.karmaScore <= level.maxPoints,
-      ) || karmaLevels[0]
-    );
-  };
-
-  const getNextLevel = () => {
-    const currentLevelIndex = karmaLevels.findIndex(
-      level =>
-        userData.karmaScore >= level.minPoints &&
-        userData.karmaScore <= level.maxPoints,
-    );
-    return karmaLevels[currentLevelIndex + 1] || null;
-  };
-
-  const getProgressPercentage = () => {
-    const currentLevel = getCurrentLevel();
-    const progress =
-      (userData.karmaScore - currentLevel.minPoints) /
-      (currentLevel.maxPoints - currentLevel.minPoints);
-    return Math.min(progress * 100, 100);
-  };
-
-  const currentLevel = getCurrentLevel();
-  const nextLevel = getNextLevel();
-
+  // Dynamic quick stats
   const quickStats: QuickStat[] = [
     {
       id: 'deeds',
@@ -111,29 +128,110 @@ const ProfileScreen: React.FC = () => {
     {
       id: 'streak',
       title: 'Streak Days',
-      value: '15',
+      value: stats.streakDays.toString(),
       icon: 'local-fire-department',
       color: '#EF4444',
     },
   ];
 
-  const handleEditAvatar = () => {
-    Alert.alert(
-      'Change Avatar 📸',
-      "Choose how you'd like to update your profile picture",
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Choose Emoji', onPress: () => console.log('Emoji picker') },
-        { text: 'Upload Photo', onPress: () => console.log('Photo picker') },
-      ],
-    );
+  const handleAvatarUploadSuccess = async (result: string) => {
+    try {
+      if (result.startsWith('emoji:')) {
+        // Handle emoji selection - delete old avatar if exists
+        if (userData.avatarUrl) {
+          await ImageUploadService.deleteImage(userData.avatarUrl, 'avatars');
+        }
+        await updateProfile({
+          avatar_url: '',
+        });
+        Alert.alert('Success! ✨', 'Avatar updated successfully!');
+      } else if (result === '') {
+        // Handle photo removal - delete from storage
+        if (userData.avatarUrl) {
+          const deleteResult = await ImageUploadService.deleteImage(
+            userData.avatarUrl,
+            'avatars',
+          );
+          if (!deleteResult.success) {
+            console.warn('Failed to delete old avatar:', deleteResult.error);
+          }
+        }
+        await updateProfile({
+          avatar_url: '',
+        });
+        Alert.alert('Success! 🗑️', 'Profile photo removed successfully!');
+      } else {
+        // Handle photo upload - delete old avatar if exists
+        if (userData.avatarUrl) {
+          await ImageUploadService.deleteImage(userData.avatarUrl, 'avatars');
+        }
+        await updateProfile({
+          avatar_url: result,
+        });
+        Alert.alert('Success! 🎉', 'Profile photo uploaded successfully!');
+      }
+
+      // Refresh profile to show updated avatar
+      await refreshAll();
+    } catch (error) {
+      console.error('Profile update error:', error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    }
+  };
+
+  const handleAvatarUploadStart = () => {
+    setIsUploadingAvatar(true);
+  };
+
+  const handleAvatarUploadEnd = () => {
+    setIsUploadingAvatar(false);
   };
 
   const handleEditProfile = () => {
-    Alert.alert('Edit Profile ✏️', 'Update your name, bio, and location', [
+    Alert.alert('Edit Profile ✏️', 'What would you like to update?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Edit', onPress: () => console.log('Navigate to edit profile') },
+      {
+        text: 'Edit Name',
+        onPress: () => {
+          Alert.alert(
+            'Edit Name',
+            'Name editing coming soon! For now, you can update your name through settings.',
+            [{ text: 'OK' }],
+          );
+        },
+      },
+      {
+        text: 'Edit Bio',
+        onPress: () => {
+          Alert.alert(
+            'Edit Bio',
+            'Bio editing coming soon! For now, you can update your bio through settings.',
+            [{ text: 'OK' }],
+          );
+        },
+      },
     ]);
+  };
+
+  // Handle privacy settings changes
+  const handlePrivacyToggle = async (newValue: boolean) => {
+    try {
+      setIsProfilePrivate(newValue);
+      await updatePrivacySettings({ is_profile_private: newValue });
+    } catch (error) {
+      setIsProfilePrivate(!newValue); // Revert on error
+      Alert.alert('Error', 'Failed to update privacy setting');
+    }
+  };
+
+  const handleNotificationsToggle = async (newValue: boolean) => {
+    try {
+      setNotifications(newValue);
+      await updatePrivacySettings({ notifications_enabled: newValue });
+    } catch (error) {
+      setNotifications(!newValue); // Revert on error
+      Alert.alert('Error', 'Failed to update notification setting');
+    }
   };
 
   const handleViewFullKarma = () => {
@@ -185,47 +283,47 @@ const ProfileScreen: React.FC = () => {
     );
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account ⚠️',
-      'This action cannot be undone. All your karma points and deeds will be permanently lost.',
-      [
-        { text: 'Keep Account', style: 'cancel' },
-        {
-          text: 'Delete Forever',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Final Confirmation',
-              'Type "DELETE" to confirm account deletion',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Proceed',
-                  style: 'destructive',
-                  onPress: () => console.log('Delete account'),
-                },
-              ],
-            );
-          },
-        },
-      ],
-    );
-  };
+  // const handleDeleteAccount = () => {
+  //   Alert.alert(
+  //     'Delete Account ⚠️',
+  //     'This action cannot be undone. All your karma points and deeds will be permanently lost.',
+  //     [
+  //       { text: 'Keep Account', style: 'cancel' },
+  //       {
+  //         text: 'Delete Forever',
+  //         style: 'destructive',
+  //         onPress: () => {
+  //           Alert.alert(
+  //             'Final Confirmation',
+  //             'Type "DELETE" to confirm account deletion',
+  //             [
+  //               { text: 'Cancel', style: 'cancel' },
+  //               {
+  //                 text: 'Proceed',
+  //                 style: 'destructive',
+  //                 onPress: () => console.log('Delete account'),
+  //               },
+  //             ],
+  //           );
+  //         },
+  //       },
+  //     ],
+  //   );
+  // };
 
   const renderProfileHeader = () => (
     <View style={styles.profileHeader}>
-      <TouchableOpacity
-        style={styles.avatarContainer}
-        onPress={handleEditAvatar}
-      >
-        <View style={styles.avatar}>
-          <Text style={styles.avatarEmoji}>{userData.avatar}</Text>
-        </View>
-        <View style={styles.editAvatarBadge}>
-          <Icon name="edit" size={12} color="#FFFFFF" />
-        </View>
-      </TouchableOpacity>
+      <View style={styles.avatarContainer}>
+        <AvatarPicker
+          currentAvatarUrl={userData.avatarUrl}
+          currentAvatarEmoji={userData.avatar}
+          onUploadSuccess={handleAvatarUploadSuccess}
+          onUploadStart={handleAvatarUploadStart}
+          onUploadEnd={handleAvatarUploadEnd}
+          userId={user?.id}
+          size={80}
+        />
+      </View>
 
       <View style={styles.profileInfo}>
         <Text style={styles.userName}>{userData.name}</Text>
@@ -248,42 +346,48 @@ const ProfileScreen: React.FC = () => {
   const renderKarmaSnapshot = () => (
     <View style={styles.karmaSnapshotContainer}>
       <Text style={styles.sectionTitle}>Your Karma Journey 🌱</Text>
-      <View style={styles.karmaSnapshotCard}>
-        <View style={styles.karmaScoreSection}>
-          <Text style={styles.karmaScoreNumber}>{userData.karmaScore}</Text>
-          <Text style={styles.karmaScoreLabel}>Karma Points</Text>
+      {loading.stats ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#065F46" />
+          <Text style={styles.loadingText}>Loading karma data...</Text>
         </View>
-
-        <View style={styles.karmaLevelSection}>
-          <Text style={styles.karmaCurrentLevel}>
-            Level: {currentLevel.name} {currentLevel.emoji}
-          </Text>
-          <View style={styles.progressBarContainer}>
-            <View style={styles.progressBarTrack}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  { width: `${getProgressPercentage()}%` },
-                ]}
-              />
-            </View>
-            {nextLevel && (
-              <Text style={styles.progressText}>
-                {nextLevel.minPoints - userData.karmaScore} points to{' '}
-                {nextLevel.name} {nextLevel.emoji}
-              </Text>
-            )}
+      ) : (
+        <View style={styles.karmaSnapshotCard}>
+          <View style={styles.karmaScoreSection}>
+            <Text style={styles.karmaScoreNumber}>{userData.karmaScore}</Text>
+            <Text style={styles.karmaScoreLabel}>Karma Points</Text>
           </View>
-        </View>
 
-        <TouchableOpacity
-          style={styles.viewFullKarmaButton}
-          onPress={handleViewFullKarma}
-        >
-          <Text style={styles.viewFullKarmaText}>View Full Karma Impact</Text>
-          <Icon name="arrow-forward" size={16} color="#059669" />
-        </TouchableOpacity>
-      </View>
+          <View style={styles.karmaLevelSection}>
+            <Text style={styles.karmaCurrentLevel}>
+              Level: {currentLevel.name} {currentLevel.emoji}
+            </Text>
+            <View style={styles.progressBarContainer}>
+              <View style={styles.progressBarTrack}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    { width: `${progressPercentage}%` },
+                  ]}
+                />
+              </View>
+              {nextLevel && (
+                <Text style={styles.progressText}>
+                  {pointsToNext} points to {nextLevel.name} {nextLevel.emoji}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.viewFullKarmaButton}
+            onPress={handleViewFullKarma}
+          >
+            <Text style={styles.viewFullKarmaText}>View Full Karma Impact</Text>
+            <Icon name="arrow-forward" size={16} color="#059669" />
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 
@@ -318,9 +422,10 @@ const ProfileScreen: React.FC = () => {
         </View>
         <Switch
           value={isProfilePrivate}
-          onValueChange={setIsProfilePrivate}
+          onValueChange={handlePrivacyToggle}
           trackColor={{ false: '#E5E7EB', true: '#86EFAC' }}
           thumbColor={isProfilePrivate ? '#059669' : '#F3F4F6'}
+          disabled={loading.updating}
         />
       </View>
 
@@ -333,14 +438,6 @@ const ProfileScreen: React.FC = () => {
         <Icon name="keyboard-arrow-right" size={20} color="#9CA3AF" />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.settingItem} onPress={handleEditAvatar}>
-        <View style={styles.settingLeft}>
-          <Icon name="photo-camera" size={20} color="#6B7280" />
-          <Text style={styles.settingLabel}>Change Avatar</Text>
-        </View>
-        <Icon name="keyboard-arrow-right" size={20} color="#9CA3AF" />
-      </TouchableOpacity>
-
       {/* Notifications */}
       <View style={styles.settingItem}>
         <View style={styles.settingLeft}>
@@ -349,9 +446,10 @@ const ProfileScreen: React.FC = () => {
         </View>
         <Switch
           value={notifications}
-          onValueChange={setNotifications}
+          onValueChange={handleNotificationsToggle}
           trackColor={{ false: '#E5E7EB', true: '#86EFAC' }}
           thumbColor={notifications ? '#059669' : '#F3F4F6'}
+          disabled={loading.updating}
         />
       </View>
 
@@ -379,6 +477,71 @@ const ProfileScreen: React.FC = () => {
     </View>
   );
 
+  const renderRecentActivity = () => (
+    <View style={styles.recentActivityContainer}>
+      <Text style={styles.sectionTitle}>Recent Activity 📈</Text>
+      {loading.activity ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#065F46" />
+          <Text style={styles.loadingText}>Loading activity...</Text>
+        </View>
+      ) : errors.activity ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Failed to load recent activity</Text>
+          <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : recentActivity.length === 0 ? (
+        <View style={styles.emptyActivityContainer}>
+          <Text style={styles.emptyActivityEmoji}>🌱</Text>
+          <Text style={styles.emptyActivityText}>No recent activity</Text>
+          <Text style={styles.emptyActivitySubtext}>
+            Start logging deeds to see your activity!
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.activityList}>
+          {recentActivity.slice(0, 3).map(activity => (
+            <View key={activity.id} style={styles.activityItem}>
+              <View style={styles.activityIcon}>
+                <Text style={styles.activityEmoji}>{activity.icon}</Text>
+              </View>
+              <View style={styles.activityContent}>
+                <Text style={styles.activityTitle}>{activity.title}</Text>
+                <Text style={styles.activityDescription} numberOfLines={2}>
+                  {activity.description}
+                </Text>
+                <View style={styles.activityMeta}>
+                  <Text style={styles.activityDate}>
+                    {new Date(activity.date).toLocaleDateString()}
+                  </Text>
+                  {activity.karma_earned && (
+                    <View style={styles.activityKarma}>
+                      <Icon name="star" size={12} color="#F59E0B" />
+                      <Text style={styles.activityKarmaText}>
+                        +{activity.karma_earned}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+          ))}
+          {recentActivity.length > 3 && (
+            <TouchableOpacity
+              style={styles.viewAllButton}
+              onPress={handleViewFullKarma}
+            >
+              <Text style={styles.viewAllText}>View All Activity</Text>
+              <Icon name="arrow-forward" size={16} color="#059669" />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+    </View>
+  );
+
   const renderAccountInfo = () => (
     <View style={styles.accountContainer}>
       <Text style={styles.sectionTitle}>Account Information 📄</Text>
@@ -396,7 +559,11 @@ const ProfileScreen: React.FC = () => {
 
         <View style={styles.accountInfoItem}>
           <Text style={styles.accountInfoLabel}>Location</Text>
-          <Text style={styles.accountInfoValue}>{userData.location}</Text>
+          <TouchableOpacity onPress={handleEditLocation}>
+            <Text style={[styles.accountInfoValue, styles.editableValue]}>
+              {userData.location}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -404,6 +571,19 @@ const ProfileScreen: React.FC = () => {
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Icon name="logout" size={20} color="#FFFFFF" />
         <Text style={styles.logoutButtonText}>Logout</Text>
+      </TouchableOpacity>
+
+      {/* Debug Button - Remove in production */}
+      <TouchableOpacity 
+        style={[styles.logoutButton, { backgroundColor: '#F59E0B' }]} 
+        onPress={async () => {
+          Alert.alert('Debug Tests', 'Running Supabase debug tests...');
+          await SupabaseDebugService.runAllTests();
+          Alert.alert('Debug Complete', 'Check console for results');
+        }}
+      >
+        <Icon name="bug-report" size={20} color="#FFFFFF" />
+        <Text style={styles.logoutButtonText}>Debug Supabase</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -415,16 +595,97 @@ const ProfileScreen: React.FC = () => {
     </View>
   );
 
+  // Add missing handlers
+  const handleEditLocation = () => {
+    Alert.alert('Edit Location', 'Choose your location:', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Vadodara, Gujarat',
+        onPress: () => updateLocation('Vadodara, Gujarat'),
+      },
+      {
+        text: 'Mumbai, Maharashtra',
+        onPress: () => updateLocation('Mumbai, Maharashtra'),
+      },
+      { text: 'Delhi, India', onPress: () => updateLocation('Delhi, India') },
+      {
+        text: 'Bangalore, Karnataka',
+        onPress: () => updateLocation('Bangalore, Karnataka'),
+      },
+      {
+        text: 'Other',
+        onPress: () => {
+          Alert.alert('Custom Location', 'Custom location entry coming soon!');
+        },
+      },
+    ]);
+  };
+
+  const updateLocation = async (location: string) => {
+    try {
+      await updateProfile({ location });
+      Alert.alert('Success', 'Location updated successfully!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update location');
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account ⚠️',
+      'This action cannot be undone. Your account and all data will be permanently deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, Delete My Account',
+          style: 'destructive',
+          onPress: () => {
+            // Final confirmation
+            Alert.alert(
+              'Final Confirmation',
+              'This will permanently deactivate your account. This action cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Account',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await ProfileService.deleteUserAccount();
+                      Alert.alert(
+                        'Account Deleted',
+                        'Your account has been deactivated.',
+                      );
+                    } catch (error) {
+                      Alert.alert(
+                        'Error',
+                        'Failed to delete account. Please try again.',
+                      );
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
       >
         {renderProfileHeader()}
         {renderKarmaSnapshot()}
         {renderQuickStats()}
+        {renderRecentActivity()}
         {renderSettings()}
         {renderAccountInfo()}
       </ScrollView>
@@ -472,6 +733,11 @@ const styles = StyleSheet.create({
   },
   avatarEmoji: {
     fontSize: 32,
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
   editAvatarBadge: {
     position: 'absolute',
@@ -762,6 +1028,150 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#EF4444',
     fontFamily: 'System',
+  },
+  // Loading states
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'System',
+  },
+  // Error states
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#DC2626',
+    textAlign: 'center',
+    marginBottom: 12,
+    fontFamily: 'System',
+  },
+  retryButton: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'System',
+  },
+  // Recent Activity styles
+  recentActivityContainer: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  emptyActivityContainer: {
+    alignItems: 'center',
+    paddingVertical: 30,
+  },
+  emptyActivityEmoji: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  emptyActivityText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#065F46',
+    marginBottom: 4,
+    fontFamily: 'System',
+  },
+  emptyActivitySubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    fontFamily: 'System',
+  },
+  activityList: {
+    marginTop: 8,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  activityIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  activityEmoji: {
+    fontSize: 16,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#065F46',
+    marginBottom: 2,
+    fontFamily: 'System',
+  },
+  activityDescription: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 6,
+    lineHeight: 16,
+    fontFamily: 'System',
+  },
+  activityMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  activityDate: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontFamily: 'System',
+  },
+  activityKarma: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  activityKarmaText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#F59E0B',
+    marginLeft: 2,
+    fontFamily: 'System',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    paddingVertical: 8,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#059669',
+    marginRight: 4,
+    fontFamily: 'System',
+  },
+  editableValue: {
+    color: '#059669',
+    textDecorationLine: 'underline',
   },
 });
 

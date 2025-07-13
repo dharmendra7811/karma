@@ -7,194 +7,64 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-
-interface Achievement {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  earned: boolean;
-  earnedDate?: string;
-  category: string;
-}
-
-interface ImpactItem {
-  id: string;
-  type: 'deed' | 'event';
-  title: string;
-  description: string;
-  date: string;
-  points: number;
-  icon: string;
-}
-
-interface KarmaLevel {
-  name: string;
-  emoji: string;
-  minPoints: number;
-  maxPoints: number;
-}
+import { useImpact } from '../contexts/ImpactContext';
 
 const ImpactScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'personal' | 'local' | 'global'>(
     'personal',
   );
+  const [refreshing, setRefreshing] = useState(false);
 
-  // User's karma data
-  const currentKarma = 452;
-  const karmaLevels: KarmaLevel[] = [
-    { name: 'Seedling', emoji: '🌱', minPoints: 0, maxPoints: 99 },
-    { name: 'Sprout', emoji: '🌿', minPoints: 100, maxPoints: 299 },
-    { name: 'Lotus', emoji: '🪷', minPoints: 300, maxPoints: 599 },
-    { name: 'Tree', emoji: '🌳', minPoints: 600, maxPoints: 999 },
-    { name: 'Forest', emoji: '🌲', minPoints: 1000, maxPoints: 9999 },
-  ];
+  const {
+    currentKarma,
+    impactItems,
+    achievements,
+    globalStats,
+    karmaLevels,
+    loading,
+    errors,
+    currentLevel,
+    nextLevel,
+    progressPercentage,
+    pointsToNext,
+    refreshAll,
+  } = useImpact();
 
-  const getCurrentLevel = () => {
-    return (
-      karmaLevels.find(
-        level =>
-          currentKarma >= level.minPoints && currentKarma <= level.maxPoints,
-      ) || karmaLevels[0]
-    );
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshAll();
+    } catch (error) {
+      console.error('Error refreshing impact data:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  const getNextLevel = () => {
-    const currentLevelIndex = karmaLevels.findIndex(
-      level =>
-        currentKarma >= level.minPoints && currentKarma <= level.maxPoints,
-    );
-    return karmaLevels[currentLevelIndex + 1] || null;
-  };
-
-  const getProgressPercentage = () => {
-    const currentLevel = getCurrentLevel();
-    const progress =
-      (currentKarma - currentLevel.minPoints) /
-      (currentLevel.maxPoints - currentLevel.minPoints);
-    return Math.min(progress * 100, 100);
-  };
-
-  const currentLevel = getCurrentLevel();
-  const nextLevel = getNextLevel();
-  const pointsToNext = nextLevel ? nextLevel.minPoints - currentKarma : 0;
-
-  const mockImpactItems: ImpactItem[] = [
-    {
-      id: '1',
-      type: 'deed',
-      title: 'Helped elderly neighbor with groceries',
-      description: 'Carried heavy bags and spent time chatting',
-      date: 'June 25, 2025',
-      points: 15,
-      icon: '🛒',
-    },
-    {
-      id: '2',
-      type: 'event',
-      title: 'Community Garden Cleanup',
-      description: 'Joined 12 others to maintain our local garden',
-      date: 'June 24, 2025',
-      points: 25,
-      icon: '🌱',
-    },
-    {
-      id: '3',
-      type: 'deed',
-      title: 'Donated books to library',
-      description: "Gave 20 children's books to local library",
-      date: 'June 22, 2025',
-      points: 20,
-      icon: '📚',
-    },
-    {
-      id: '4',
-      type: 'deed',
-      title: 'Volunteered at animal shelter',
-      description: 'Helped walk dogs and clean kennels',
-      date: 'June 20, 2025',
-      points: 18,
-      icon: '🐕',
-    },
-    {
-      id: '5',
-      type: 'event',
-      title: 'Beach Cleanup Drive',
-      description: 'Collected plastic waste with 30 volunteers',
-      date: 'June 18, 2025',
-      points: 30,
-      icon: '🏖️',
-    },
-  ];
-
-  const mockAchievements: Achievement[] = [
-    {
-      id: '1',
-      title: 'First Steps',
-      description: 'Logged your first good deed',
-      icon: '👶',
-      earned: true,
-      earnedDate: 'May 15, 2025',
-      category: 'milestone',
-    },
-    {
-      id: '2',
-      title: 'Community Builder',
-      description: 'Joined 5 community events',
-      icon: '🏗️',
-      earned: true,
-      earnedDate: 'June 10, 2025',
-      category: 'community',
-    },
-    {
-      id: '3',
-      title: 'Green Warrior',
-      description: 'Completed 10 environmental deeds',
-      icon: '🌍',
-      earned: true,
-      earnedDate: 'June 20, 2025',
-      category: 'environment',
-    },
-    {
-      id: '4',
-      title: 'Photo Champion',
-      description: 'Most inspiring photo this month',
-      icon: '📸',
-      earned: true,
-      earnedDate: 'June 22, 2025',
-      category: 'special',
-    },
-    {
-      id: '5',
-      title: 'Helping Hand',
-      description: 'Complete 25 helping deeds',
-      icon: '🤝',
-      earned: false,
-      category: 'helping',
-    },
-    {
-      id: '6',
-      title: 'Super Connector',
-      description: 'Organize 3 community events',
-      icon: '⭐',
-      earned: false,
-      category: 'leadership',
-    },
-  ];
-
-  const handleAchievementPress = (achievement: Achievement) => {
+  const handleAchievementPress = (achievement: any) => {
     if (achievement.earned) {
       Alert.alert(
         `${achievement.icon} ${achievement.title}`,
-        `${achievement.description}\n\nEarned: ${achievement.earnedDate}`,
+        `${achievement.description}\n\n${
+          achievement.earnedDate
+            ? `Earned: ${achievement.earnedDate}`
+            : 'Achievement unlocked!'
+        }`,
         [{ text: 'Awesome!', style: 'default' }],
       );
     } else {
+      const progressText =
+        achievement.requiredCount && achievement.currentCount !== undefined
+          ? `\n\nProgress: ${achievement.currentCount}/${achievement.requiredCount}`
+          : '';
+
       Alert.alert(
         `${achievement.icon} ${achievement.title}`,
-        `${achievement.description}\n\nKeep going to unlock this achievement!`,
+        `${achievement.description}${progressText}\n\nKeep going to unlock this achievement!`,
         [{ text: 'Got it!', style: 'default' }],
       );
     }
@@ -203,13 +73,23 @@ const ImpactScreen: React.FC = () => {
   const renderKarmaScore = () => (
     <View style={styles.karmaScoreContainer}>
       <View style={styles.karmaScoreMain}>
-        <Text style={styles.karmaNumber}>{currentKarma}</Text>
-        <View style={styles.karmaLevelInfo}>
-          <Text style={styles.karmaLevelEmoji}>{currentLevel.emoji}</Text>
-          <Text style={styles.karmaLevelText}>
-            You're blooming! (Level: {currentLevel.name} {currentLevel.emoji})
-          </Text>
-        </View>
+        {loading.karma ? (
+          <ActivityIndicator size="large" color="#065F46" />
+        ) : (
+          <>
+            <Text style={styles.karmaNumber}>{currentKarma}</Text>
+            <View style={styles.karmaLevelInfo}>
+              <Text style={styles.karmaLevelEmoji}>{currentLevel.emoji}</Text>
+              <Text style={styles.karmaLevelText}>
+                You're blooming! (Level: {currentLevel.name}{' '}
+                {currentLevel.emoji})
+              </Text>
+            </View>
+          </>
+        )}
+        {errors.karma && (
+          <Text style={styles.errorText}>Failed to load karma score</Text>
+        )}
       </View>
     </View>
   );
@@ -224,7 +104,7 @@ const ImpactScreen: React.FC = () => {
           <View
             style={[
               styles.progressBarFill,
-              { width: `${getProgressPercentage()}%` },
+              { width: `${progressPercentage}%` },
             ]}
           />
         </View>
@@ -257,63 +137,105 @@ const ImpactScreen: React.FC = () => {
   );
 
   const renderPersonalTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.tabContent}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
+    >
       <Text style={styles.sectionTitle}>Your Impact Timeline 📚</Text>
 
-      {mockImpactItems.map(item => (
-        <View key={item.id} style={styles.impactItem}>
-          <View style={styles.impactIcon}>
-            <Text style={styles.impactEmoji}>{item.icon}</Text>
-          </View>
-          <View style={styles.impactContent}>
-            <Text style={styles.impactTitle}>{item.title}</Text>
-            <Text style={styles.impactDescription}>{item.description}</Text>
-            <View style={styles.impactMeta}>
-              <Text style={styles.impactDate}>{item.date}</Text>
-              <View style={styles.impactPoints}>
-                <Icon name="star" size={14} color="#F59E0B" />
-                <Text style={styles.impactPointsText}>+{item.points}</Text>
+      {loading.impactItems ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#065F46" />
+          <Text style={styles.loadingText}>Loading your impact...</Text>
+        </View>
+      ) : errors.impactItems ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Failed to load impact timeline</Text>
+          <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : impactItems.length === 0 ? (
+        <View style={styles.emptyStateContainer}>
+          <Text style={styles.emptyStateEmoji}>🌱</Text>
+          <Text style={styles.emptyStateTitle}>Start Your Impact Journey</Text>
+          <Text style={styles.emptyStateText}>
+            Log your first good deed to see your impact timeline!
+          </Text>
+        </View>
+      ) : (
+        impactItems.map(item => (
+          <View key={item.id} style={styles.impactItem}>
+            <View style={styles.impactIcon}>
+              <Text style={styles.impactEmoji}>{item.icon}</Text>
+            </View>
+            <View style={styles.impactContent}>
+              <Text style={styles.impactTitle}>{item.title}</Text>
+              <Text style={styles.impactDescription}>{item.description}</Text>
+              <View style={styles.impactMeta}>
+                <Text style={styles.impactDate}>{item.date}</Text>
+                <View style={styles.impactPoints}>
+                  <Icon name="star" size={14} color="#F59E0B" />
+                  <Text style={styles.impactPointsText}>+{item.points}</Text>
+                </View>
               </View>
             </View>
           </View>
-        </View>
-      ))}
+        ))
+      )}
 
       <View style={styles.achievementsSection}>
         <Text style={styles.sectionTitle}>Achievements & Badges 🏅</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.achievementsContainer}
-        >
-          {mockAchievements.map(achievement => (
-            <TouchableOpacity
-              key={achievement.id}
-              style={[
-                styles.achievementBadge,
-                !achievement.earned && styles.achievementBadgeLocked,
-              ]}
-              onPress={() => handleAchievementPress(achievement)}
-            >
-              <Text
+
+        {loading.achievements ? (
+          <ActivityIndicator size="small" color="#065F46" />
+        ) : errors.achievements ? (
+          <Text style={styles.errorText}>Failed to load achievements</Text>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.achievementsContainer}
+          >
+            {achievements.map(achievement => (
+              <TouchableOpacity
+                key={achievement.id}
                 style={[
-                  styles.achievementIcon,
-                  !achievement.earned && styles.achievementIconLocked,
+                  styles.achievementBadge,
+                  !achievement.earned && styles.achievementBadgeLocked,
                 ]}
+                onPress={() => handleAchievementPress(achievement)}
               >
-                {achievement.icon}
-              </Text>
-              <Text
-                style={[
-                  styles.achievementTitle,
-                  !achievement.earned && styles.achievementTitleLocked,
-                ]}
-              >
-                {achievement.title}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+                <Text
+                  style={[
+                    styles.achievementIcon,
+                    !achievement.earned && styles.achievementIconLocked,
+                  ]}
+                >
+                  {achievement.icon}
+                </Text>
+                <Text
+                  style={[
+                    styles.achievementTitle,
+                    !achievement.earned && styles.achievementTitleLocked,
+                  ]}
+                >
+                  {achievement.title}
+                </Text>
+                {!achievement.earned &&
+                  achievement.requiredCount &&
+                  achievement.currentCount !== undefined && (
+                    <Text style={styles.achievementProgress}>
+                      {achievement.currentCount}/{achievement.requiredCount}
+                    </Text>
+                  )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
       </View>
     </ScrollView>
   );
@@ -372,62 +294,82 @@ const ImpactScreen: React.FC = () => {
   );
 
   const renderGlobalTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.tabContent}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
+    >
       <Text style={styles.sectionTitle}>Global Impact 🌍</Text>
 
-      <View style={styles.globalStatsContainer}>
-        <View style={styles.globalStatCard}>
-          <Text style={styles.globalStatNumber}>72,456</Text>
-          <Text style={styles.globalStatLabel}>
-            Karma Points Earned Worldwide
-          </Text>
-          <Text style={styles.globalStatEmoji}>🌍</Text>
+      {loading.globalStats ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#065F46" />
+          <Text style={styles.loadingText}>Loading global stats...</Text>
         </View>
+      ) : errors.globalStats ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Failed to load global stats</Text>
+          <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <>
+          <View style={styles.globalStatsContainer}>
+            <View style={styles.globalStatCard}>
+              <Text style={styles.globalStatNumber}>
+                {globalStats.totalKarmaPoints.toLocaleString()}
+              </Text>
+              <Text style={styles.globalStatLabel}>
+                Karma Points Earned Worldwide
+              </Text>
+              <Text style={styles.globalStatEmoji}>🌍</Text>
+            </View>
 
-        <View style={styles.globalStatCard}>
-          <Text style={styles.globalStatNumber}>1,208</Text>
-          <Text style={styles.globalStatLabel}>
-            Environmental Acts This Week
-          </Text>
-          <Text style={styles.globalStatEmoji}>💧</Text>
-        </View>
+            <View style={styles.globalStatCard}>
+              <Text style={styles.globalStatNumber}>
+                {globalStats.environmentalActs.toLocaleString()}
+              </Text>
+              <Text style={styles.globalStatLabel}>
+                Environmental Acts This Week
+              </Text>
+              <Text style={styles.globalStatEmoji}>💧</Text>
+            </View>
 
-        <View style={styles.globalStatCard}>
-          <Text style={styles.globalStatNumber}>15,432</Text>
-          <Text style={styles.globalStatLabel}>People Helped Globally</Text>
-          <Text style={styles.globalStatEmoji}>🤝</Text>
-        </View>
-      </View>
+            <View style={styles.globalStatCard}>
+              <Text style={styles.globalStatNumber}>
+                {globalStats.peopleHelped.toLocaleString()}
+              </Text>
+              <Text style={styles.globalStatLabel}>People Helped Globally</Text>
+              <Text style={styles.globalStatEmoji}>🤝</Text>
+            </View>
+          </View>
 
-      <View style={styles.globalMapPlaceholder}>
-        <Icon name="public" size={48} color="#10B981" />
-        <Text style={styles.globalMapText}>Global Good Deeds</Text>
-        <Text style={styles.globalMapSubtext}>
-          Watch kindness spread across the world
-        </Text>
-      </View>
+          <View style={styles.globalMapPlaceholder}>
+            <Icon name="public" size={48} color="#10B981" />
+            <Text style={styles.globalMapText}>Global Good Deeds</Text>
+            <Text style={styles.globalMapSubtext}>
+              Watch kindness spread across the world
+            </Text>
+          </View>
 
-      <Text style={styles.sectionTitle}>This Week's Global Highlights 🌟</Text>
-      <View style={styles.globalHighlights}>
-        <View style={styles.globalHighlight}>
-          <Text style={styles.globalHighlightEmoji}>🌱</Text>
-          <Text style={styles.globalHighlightText}>
-            2,450 trees planted worldwide
+          <Text style={styles.sectionTitle}>
+            This Week's Global Highlights 🌟
           </Text>
-        </View>
-        <View style={styles.globalHighlight}>
-          <Text style={styles.globalHighlightEmoji}>📚</Text>
-          <Text style={styles.globalHighlightText}>
-            890 education initiatives started
-          </Text>
-        </View>
-        <View style={styles.globalHighlight}>
-          <Text style={styles.globalHighlightEmoji}>🍲</Text>
-          <Text style={styles.globalHighlightText}>
-            12,300 meals served to those in need
-          </Text>
-        </View>
-      </View>
+          <View style={styles.globalHighlights}>
+            {globalStats.highlights.map(highlight => (
+              <View key={highlight.id} style={styles.globalHighlight}>
+                <Text style={styles.globalHighlightEmoji}>
+                  {highlight.emoji}
+                </Text>
+                <Text style={styles.globalHighlightText}>{highlight.text}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
     </ScrollView>
   );
 
@@ -746,6 +688,75 @@ const styles = StyleSheet.create({
   },
   achievementTitleLocked: {
     color: '#9CA3AF',
+  },
+  achievementProgress: {
+    fontSize: 9,
+    color: '#6B7280',
+    marginTop: 4,
+    fontFamily: 'System',
+  },
+  // Loading and Error States
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'System',
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#DC2626',
+    textAlign: 'center',
+    marginBottom: 12,
+    fontFamily: 'System',
+  },
+  retryButton: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'System',
+  },
+  // Empty State
+  emptyStateContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyStateEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#065F46',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: 'System',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+    fontFamily: 'System',
+  },
+  contributorNameHighlight: {
+    color: '#059669',
+    fontWeight: '700',
   },
   statsContainer: {
     flexDirection: 'row',

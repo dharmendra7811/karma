@@ -22,11 +22,20 @@ export interface Profile {
   username?: string;
   full_name?: string;
   avatar_url?: string;
+  avatar_emoji?: string;
   bio?: string;
+  location?: string;
+  status?: string;
   karma_points: number;
   total_deeds: number;
   created_at: string;
   updated_at: string;
+  // Privacy and settings
+  is_profile_private?: boolean;
+  notifications_enabled?: boolean;
+  theme_preference?: 'light' | 'dark' | 'system';
+  is_active?: boolean;
+  deactivated_at?: string;
 }
 
 export interface DeedCategory {

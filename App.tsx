@@ -8,6 +8,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { ImpactProvider } from './src/contexts/ImpactContext';
+import { ProfileProvider } from './src/contexts/ProfileContext';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import HomeScreen from './src/screens/HomeScreen';
 import ActionScreen from './src/screens/ActionScreen';
@@ -111,7 +113,11 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <ProfileProvider>
+        <ImpactProvider>
+          <AppContent />
+        </ImpactProvider>
+      </ProfileProvider>
     </AuthProvider>
   );
 };
