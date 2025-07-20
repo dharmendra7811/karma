@@ -1,3 +1,23 @@
+// File: android/settings.gradle
+
+// >>> ADD THIS ENTIRE BLOCK TO THE TOP OF THE FILE <<<
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == 'org.jetbrains.kotlin.android') {
+                useVersion "1.9.23"
+            }
+        }
+    }
+}
+
+// ... rest of your settings.gradle file (rootProject.name, include ':app', etc.)
+
 rootProject.name = 'GoodDeedsApp'
 apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesSettingsGradle(settings)
 include ':app'

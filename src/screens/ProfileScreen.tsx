@@ -13,7 +13,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import AvatarPicker from '../components/AvatarPicker';
+import EnhancedAvatarPicker from '../components/EnhancedAvatarPicker';
 import { ImageUploadService } from '../services/ImageUploadService';
 import { SupabaseDebugService } from '../services/SupabaseDebugService';
 import { useAuth } from '../contexts/AuthContext';
@@ -314,13 +314,14 @@ const ProfileScreen: React.FC = () => {
   const renderProfileHeader = () => (
     <View style={styles.profileHeader}>
       <View style={styles.avatarContainer}>
-        <AvatarPicker
+        <EnhancedAvatarPicker
           currentAvatarUrl={userData.avatarUrl}
           currentAvatarEmoji={userData.avatar}
           onUploadSuccess={handleAvatarUploadSuccess}
           onUploadStart={handleAvatarUploadStart}
           onUploadEnd={handleAvatarUploadEnd}
           userId={user?.id}
+          key={user?.id}
           size={80}
         />
       </View>
@@ -574,8 +575,8 @@ const ProfileScreen: React.FC = () => {
       </TouchableOpacity>
 
       {/* Debug Button - Remove in production */}
-      <TouchableOpacity 
-        style={[styles.logoutButton, { backgroundColor: '#F59E0B' }]} 
+      <TouchableOpacity
+        style={[styles.logoutButton, { backgroundColor: '#F59E0B' }]}
         onPress={async () => {
           Alert.alert('Debug Tests', 'Running Supabase debug tests...');
           await SupabaseDebugService.runAllTests();
