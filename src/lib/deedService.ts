@@ -23,7 +23,9 @@ export class DeedService {
     title: string;
     description?: string;
     location?: string;
-    image_url?: string;
+    latitude?: string | null;
+    longitude?: string | null;
+    image_url?: string | string[];
   }): Promise<Deed> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -39,6 +41,18 @@ export class DeedService {
       const baseKarma = 10; // Base karma points for any deed
       const karmaPoints = Math.round(baseKarma * (category?.karma_multiplier || 1));
 
+      // Process image URL(s) - store as JSON if multiple, string if single
+      let imageUrlToStore: string | null = null;
+      if (deedData.image_url) {
+        if (Array.isArray(deedData.image_url)) {
+          // Store multiple URLs as JSON string
+          imageUrlToStore = deedData.image_url.length > 0 ? JSON.stringify(deedData.image_url) : null;
+        } else {
+          // Store single URL as string
+          imageUrlToStore = deedData.image_url;
+        }
+      }
+
       // Insert the deed with basic select
       const { data, error } = await supabase
         .from('deeds')
@@ -49,7 +63,9 @@ export class DeedService {
             title: deedData.title,
             description: deedData.description,
             location: deedData.location,
-            image_url: deedData.image_url,
+            latitude: deedData.latitude,
+            longitude: deedData.longitude,
+            image_url: imageUrlToStore,
             karma_points: karmaPoints,
           }
         ])
@@ -152,6 +168,20 @@ export class DeedService {
       console.error('Error fetching karma stats:', error);
       // Return default values on error
       return { karma_points: 0, total_deeds: 0 };
+    }
+  }
+
+  // Helper function to parse image URLs from deed
+  static getImageUrls(deed: Deed): string[] {
+    if (!deed.image_url) return [];
+    
+    try {
+      // Try to parse as JSON array first
+      const parsed = JSON.parse(deed.image_url);
+      return Array.isArray(parsed) ? parsed : [deed.image_url];
+    } catch {
+      // If not JSON, treat as single URL
+      return [deed.image_url];
     }
   }
 

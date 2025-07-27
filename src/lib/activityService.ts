@@ -13,7 +13,7 @@ export interface CommunityActivity {
   max_participants?: number;
   current_participants: number;
   category_id?: string;
-  image_url?: string;
+  image_url?: string; // Can be single URL string or JSON array of URLs
   status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
   created_at: string;
   updated_at: string;
@@ -44,17 +44,29 @@ export class ActivityService {
     title: string;
     description: string;
     location?: string;
-    latitude?: number;
-    longitude?: number;
+    latitude?: string;
+    longitude?: string;
     activity_date: string;
     activity_time: string;
     max_participants?: number;
     category_id?: string;
-    image_url?: string;
+    image_url?: string | string[];
   }): Promise<CommunityActivity> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
+
+      // Process image URL(s) - store as JSON if multiple, string if single
+      let imageUrlToStore: string | null = null;
+      if (activityData.image_url) {
+        if (Array.isArray(activityData.image_url)) {
+          // Store multiple URLs as JSON string
+          imageUrlToStore = activityData.image_url.length > 0 ? JSON.stringify(activityData.image_url) : null;
+        } else {
+          // Store single URL as string
+          imageUrlToStore = activityData.image_url;
+        }
+      }
 
       const { data, error } = await supabase
         .from('community_activities')
@@ -68,9 +80,9 @@ export class ActivityService {
             activity_time: activityData.activity_time,
             max_participants: activityData.max_participants,
             category_id: activityData.category_id,
-            image_url: activityData.image_url,
-            latitude: activityData.latitude,
-            longitude: activityData.longitude,
+            image_url: imageUrlToStore,
+            latitude: activityData.latitude ? parseFloat(activityData.latitude) : null,
+            longitude: activityData.longitude ? parseFloat(activityData.longitude) : null,
           }
         ])
         .select('*')
@@ -244,6 +256,20 @@ export class ActivityService {
     } catch (error) {
       console.error('Error updating activity status:', error);
       throw error;
+    }
+  }
+
+  // Helper function to parse image URLs from activity
+  static getImageUrls(activity: CommunityActivity): string[] {
+    if (!activity.image_url) return [];
+    
+    try {
+      // Try to parse as JSON array first
+      const parsed = JSON.parse(activity.image_url);
+      return Array.isArray(parsed) ? parsed : [activity.image_url];
+    } catch {
+      // If not JSON, treat as single URL
+      return [activity.image_url];
     }
   }
 

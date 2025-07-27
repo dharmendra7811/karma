@@ -56,7 +56,7 @@ export interface Deed {
   description?: string;
   karma_points: number;
   location?: string;
-  image_url?: string;
+  image_url?: string; // Can be single URL string or JSON array of URLs
   is_verified: boolean;
   created_at: string;
   updated_at: string;

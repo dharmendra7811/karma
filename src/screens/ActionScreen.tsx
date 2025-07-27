@@ -309,7 +309,7 @@ const ActionScreen: React.FC = () => {
         location: deedForm.location.trim() || undefined,
         latitude: deedForm.latitude,
         longitude: deedForm.longitude,
-        image_urls: imageUrls.length > 0 ? imageUrls : undefined,
+        image_url: imageUrls.length > 0 ? imageUrls : undefined,
       });
 
       Alert.alert(
@@ -367,9 +367,46 @@ const ActionScreen: React.FC = () => {
     }
 
     setIsSubmittingActivity(true);
-    console.log('activityForm', activityForm);
+    let imageUrls: string[] = [];
 
     try {
+      // Upload images if any
+      if (activityImages.length > 0) {
+        setIsUploadingImages(true);
+        const uploadResult = await ImageUploadService.uploadMultipleImages(
+          activityImages,
+          'activity',
+          user?.id,
+          progress => {
+            console.log(`Upload progress: ${Math.round(progress * 100)}%`);
+          },
+        );
+
+        if (uploadResult.success) {
+          imageUrls = uploadResult.urls;
+        } else {
+          // Show upload errors but still allow activity submission
+          Alert.alert(
+            'Image Upload Issues',
+            `Some images failed to upload: ${uploadResult.errors.join(
+              ', ',
+            )}. Continue anyway?`,
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+                onPress: () => {
+                  setIsSubmittingActivity(false);
+                  return;
+                },
+              },
+              { text: 'Continue', onPress: () => {} },
+            ],
+          );
+        }
+        setIsUploadingImages(false);
+      }
+
       await ActivityService.createActivity({
         title: activityForm.title.trim(),
         description: activityForm.description.trim(),
@@ -382,11 +419,14 @@ const ActionScreen: React.FC = () => {
         category_id: activityForm.selectedCategory || undefined,
         latitude: activityForm.latitude as string,
         longitude: activityForm.longitude as string,
+        image_url: imageUrls.length > 0 ? imageUrls : undefined, // Send all image URLs
       });
 
       Alert.alert(
         'Activity Created! 🎉',
-        'Your community activity has been posted! Others can now join and help make a difference together.',
+        `Your community activity has been posted! Others can now join and help make a difference together.${
+          imageUrls.length > 0 ? ` ${imageUrls.length} photo(s) attached.` : ''
+        }`,
         [
           {
             text: 'Great!',
@@ -399,6 +439,7 @@ const ActionScreen: React.FC = () => {
       Alert.alert('Error', 'Failed to create your activity. Please try again.');
     } finally {
       setIsSubmittingActivity(false);
+      setIsUploadingImages(false);
     }
   };
 

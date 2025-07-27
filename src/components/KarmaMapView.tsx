@@ -195,12 +195,6 @@ const KarmaMapView: React.FC<KarmaMapViewProps> = ({ activities = [] }) => {
             
             // Add app info control
             const info = L.control({position: 'topright'});
-            info.onAdd = function (map) {
-                this._div = L.DomUtil.create('div', 'info-control');
-                this._div.innerHTML = '<h4>🆓 Karma Community Map</h4><p>' + activities.length + ' activities available</p>';
-                return this._div;
-            };
-            info.addTo(map);
             
             // Add legend
             const legend = L.control({position: 'bottomleft'});
