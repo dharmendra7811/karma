@@ -17,6 +17,7 @@ import { DeedService } from '../lib/deedService';
 import { ActivityService } from '../lib/activityService';
 import { Activity } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigation } from '../contexts/NavigationContext';
 
 // Extended activity interface for display purposes
 interface EnhancedActivity extends Activity {
@@ -30,6 +31,7 @@ const { width } = Dimensions.get('window');
 
 const HomeScreen: React.FC = () => {
   const { user } = useAuth();
+  const navigation = useNavigation();
   const [activities, setActivities] = useState<EnhancedActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -188,9 +190,15 @@ const HomeScreen: React.FC = () => {
     Alert.alert(
       'Inspired! ✨',
       `You're inspired by ${
-        activity.full_name || activity.username || 'this person'
-      }'s good deed!`,
-      [{ text: 'Keep Spreading Kindness!' }],
+        activity.user_profiles?.full_name || activity.user_profiles?.username || activity.full_name || activity.username || 'this person'
+      }'s ${activity.activity_type === 'deed_logged' ? 'good deed' : 'community event'}!`,
+      [
+        { text: 'Keep Spreading Kindness!' },
+        { 
+          text: 'Share My Own', 
+          onPress: () => navigation.navigate('action')
+        }
+      ]
     );
   };
 
@@ -198,7 +206,58 @@ const HomeScreen: React.FC = () => {
     Alert.alert(
       'Share Kindness 📢',
       'Sharing feature coming soon! Help us spread good vibes.',
-      [{ text: 'Got it!' }],
+      [
+        { text: 'Got it!' },
+        { 
+          text: 'Create My Own', 
+          onPress: () => navigation.navigate('action')
+        }
+      ]
+    );
+  };
+
+  const handleUserProfilePress = (activity: EnhancedActivity) => {
+    if (activity.user_id === user?.id) {
+      // Navigate to own profile
+      navigation.navigate('profile');
+    } else {
+      // Show user info (could navigate to user profile in future)
+      Alert.alert(
+        '👤 User Profile',
+        `${activity.user_profiles?.full_name || activity.user_profiles?.username || 'Anonymous User'}\n\nProfile features coming soon!`,
+        [
+          { text: 'Got it!' },
+          { 
+            text: 'View My Profile', 
+            onPress: () => navigation.navigate('profile')
+          }
+        ]
+      );
+    }
+  };
+
+  const handleJoinEvent = (activity: EnhancedActivity) => {
+    if (!activity.activity_id) return;
+    
+    Alert.alert(
+      'Join Event 🎉',
+      `Would you like to join "${activity.title}"?`,
+      [
+        { text: 'Maybe Later', style: 'cancel' },
+        { 
+          text: 'Join Event!', 
+          onPress: async () => {
+            try {
+              await ActivityService.joinActivity(activity.activity_id!);
+              Alert.alert('Success! 🎉', 'You\'ve joined the event! Check the Explore tab for details.');
+              onRefresh(); // Refresh the feed
+            } catch (error) {
+              console.error('Error joining event:', error);
+              Alert.alert('Oops!', 'Unable to join the event. Please try again.');
+            }
+          }
+        }
+      ]
     );
   };
 
@@ -242,20 +301,8 @@ const HomeScreen: React.FC = () => {
   };
 
   const handleQuickLogDeed = () => {
-    Alert.alert(
-      'Quick Deed Log 🌟',
-      'This will take you to the Action tab to log a new good deed!',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: "Let's Go!",
-          onPress: () => {
-            // Navigate to Action tab - you'll need to implement navigation
-            console.log('Navigate to Action tab');
-          },
-        },
-      ],
-    );
+    console.log('Navigating to action tab for deed logging');
+    navigation.navigate('action');
   };
 
   const karmaLevel = getKarmaLevel(userStats.karma_points);
@@ -345,7 +392,7 @@ const HomeScreen: React.FC = () => {
 
       {/* Simple Filter Pills */}
       <View style={styles.filterContainer}>
-        <Text style={styles.feedLabel}>Recent Activity</Text>
+        {/* <Text style={styles.feedLabel}>Recent Activity</Text> */}
         <View style={styles.filterPills}>
           <TouchableOpacity
             style={[
@@ -441,13 +488,25 @@ const HomeScreen: React.FC = () => {
                 ? 'Create a community event and bring people together!'
                 : 'Start your karma journey by logging a good deed!'}
             </Text>
+            <TouchableOpacity 
+              style={styles.emptyActionButton}
+              onPress={() => navigation.navigate('action')}
+            >
+              <Icon name="add-circle" size={20} color="#FFFFFF" />
+              <Text style={styles.emptyActionText}>
+                {activeTab === 'events' ? 'Create Event' : 'Log Good Deed'}
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : (
           filteredActivities.map((activity: EnhancedActivity) => (
             <View key={activity.id} style={styles.activityCard}>
               {/* User Info */}
               <View style={styles.userInfo}>
-                <View style={styles.avatarContainer}>
+                <TouchableOpacity 
+                  style={styles.avatarContainer}
+                  onPress={() => handleUserProfilePress(activity)}
+                >
                   {activity.user_profiles?.avatar_url ? (
                     <Image
                       source={{ uri: activity.user_profiles.avatar_url }}
@@ -456,7 +515,7 @@ const HomeScreen: React.FC = () => {
                   ) : (
                     <Icon name="person" size={24} color="#059669" />
                   )}
-                </View>
+                </TouchableOpacity>
                 <View style={styles.userDetails}>
                   <Text style={styles.userName}>
                     {activity.user_profiles?.full_name ||
@@ -556,7 +615,10 @@ const HomeScreen: React.FC = () => {
                 </TouchableOpacity>
 
                 {activity.activity_type === 'activity_created' && (
-                  <TouchableOpacity style={styles.actionButton}>
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => handleJoinEvent(activity)}
+                  >
                     <Icon name="group-add" size={16} color="#059669" />
                     <Text style={styles.actionText}>Join</Text>
                   </TouchableOpacity>
@@ -766,6 +828,26 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: 24,
+  },
+  emptyActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10B981',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  emptyActionText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    marginLeft: 8,
   },
   activityCard: {
     backgroundColor: '#FFFFFF',

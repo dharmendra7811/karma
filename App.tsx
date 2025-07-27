@@ -10,6 +10,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { ImpactProvider } from './src/contexts/ImpactContext';
 import { ProfileProvider } from './src/contexts/ProfileContext';
+import { NavigationProvider } from './src/contexts/NavigationContext';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import HomeScreen from './src/screens/HomeScreen';
 import ActionScreen from './src/screens/ActionScreen';
@@ -69,7 +70,9 @@ const SimpleTabNavigator: React.FC = () => {
     <View style={styles.container}>
       {/* Content Area */}
       <View style={styles.content}>
-        <ActiveComponent />
+        <NavigationProvider navigate={setActiveTab} currentTab={activeTab}>
+          <ActiveComponent />
+        </NavigationProvider>
       </View>
 
       {/* Tab Bar */}
